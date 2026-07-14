@@ -12,8 +12,19 @@ export default function Footer() {
         
         {/* Editorial Description Column */}
         <div className="md:col-span-2 flex flex-col space-y-4">
-          <Link href="/" className="flex items-center font-serif text-xl font-bold tracking-widest text-white select-none">
-            FOREX <span className="text-brand-red ml-1">WEEKLY</span>
+          <Link href="/" className="flex items-center space-x-2 select-none cursor-pointer">
+            <img 
+              src="/logo.jpg" 
+              alt="Logo" 
+              className="h-9 w-auto object-contain rounded bg-white p-0.5" 
+            />
+            <span 
+              className="font-serif font-semibold text-lg tracking-tight"
+              style={{ fontFamily: '"Times New Roman", Times, serif' }}
+            >
+              <span className="text-brand-red">forex</span>
+              <span className="text-white ml-0.5">weekly</span>
+            </span>
           </Link>
           <p className="text-xs leading-relaxed max-w-sm">
             Forex Weekly is a premium financial market news and analysis platform delivering objective macroeconomic commentary, daily technical levels, and educational resources to active traders.

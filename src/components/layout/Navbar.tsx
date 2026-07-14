@@ -89,9 +89,20 @@ export default function Navbar() {
         </div>
 
         {/* Small Brand Indicator for Scrolled/Sticky Header on Desktop */}
-        <div className={`md:hidden ${isScrolled ? "block" : "invisible"} font-serif text-sm font-bold tracking-widest`}>
-          <Link href="/" className="text-brand-dark dark:text-white">
-            FOREX <span className="text-brand-red">WEEKLY</span>
+        <div className={`md:hidden ${isScrolled ? "block" : "invisible"}`}>
+          <Link href="/" className="flex items-center space-x-1.5 select-none cursor-pointer">
+            <img 
+              src="/logo.jpg" 
+              alt="Logo" 
+              className="h-6 w-auto object-contain rounded bg-white p-0.5" 
+            />
+            <span 
+              className="font-serif font-semibold text-xs tracking-tight"
+              style={{ fontFamily: '"Times New Roman", Times, serif' }}
+            >
+              <span className="text-brand-red">forex</span>
+              <span className="text-brand-dark dark:text-white ml-0.5">weekly</span>
+            </span>
           </Link>
         </div>
 

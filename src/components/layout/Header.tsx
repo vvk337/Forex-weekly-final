@@ -36,30 +36,19 @@ export default function Header() {
 
   return (
     <header className="w-full bg-white dark:bg-brand-dark border-b border-neutral-200 dark:border-neutral-800 py-6 px-4 sm:px-6 md:px-8 flex flex-col md:flex-row md:justify-between md:items-center gap-6 transition-colors duration-300">
-      {/* Brand Logo */}
-      <Link href="/" className="flex items-center group select-none">
-        <div className="relative flex flex-col justify-center items-center h-20 w-44 font-serif">
-          {/* Large Backing Initials F and W */}
-          <div className="absolute inset-0 flex justify-center items-center leading-none text-[84px] font-bold tracking-tight">
-            <span className="text-brand-red select-none transform translate-y-[-2px]">F</span>
-            <span className="text-brand-dark dark:text-neutral-100 select-none transform translate-y-[2px] ml-[-6px] transition-colors duration-300">W</span>
-          </div>
-
-          {/* Central Overlay Box & Border Lines */}
-          <div className="relative z-10 w-full flex flex-col justify-center items-center">
-            {/* Top Line */}
-            <div className="w-[105%] h-[1.5px] bg-brand-dark dark:bg-neutral-200 transition-colors duration-300"></div>
-            
-            {/* Text Middle */}
-            <div className="bg-white dark:bg-brand-dark py-1 px-4 text-center transition-colors duration-300">
-              <span className="text-xs font-bold tracking-[0.35em] uppercase text-brand-dark dark:text-neutral-100 transition-colors duration-300">
-                FOREX WEEKLY
-              </span>
-            </div>
-            
-            {/* Bottom Line */}
-            <div className="w-[105%] h-[1.5px] bg-brand-dark dark:bg-neutral-200 transition-colors duration-300"></div>
-          </div>
+      {/* Brand Logo with Image and Times New Roman Text */}
+      <Link href="/" className="flex items-center space-x-3 group select-none cursor-pointer">
+        <img
+          src="/logo.jpg"
+          alt="Forex Weekly Logo"
+          className="h-16 w-auto object-contain dark:bg-white dark:p-0.5 dark:rounded"
+        />
+        <div 
+          className="font-serif font-semibold text-2xl md:text-3xl tracking-tight leading-none transition-colors duration-300"
+          style={{ fontFamily: '"Times New Roman", Times, serif' }}
+        >
+          <span className="text-brand-red">forex</span>
+          <span className="text-brand-dark dark:text-neutral-100 ml-0.5">weekly</span>
         </div>
       </Link>
 
