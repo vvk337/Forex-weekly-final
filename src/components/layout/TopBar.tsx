@@ -2,9 +2,21 @@
 
 import React, { useEffect, useState } from "react";
 
+interface SessionStatus {
+  name: string;
+  label: string;
+  active: boolean;
+}
+
 export default function TopBar() {
   const [currentDate, setCurrentDate] = useState("");
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [sessions, setSessions] = useState<SessionStatus[]>([
+    { name: "Sydney", label: "SYD", active: false },
+    { name: "Tokyo", label: "TYO", active: false },
+    { name: "London", label: "LDN", active: false },
+    { name: "New York", label: "NYC", active: false },
+  ]);
 
   useEffect(() => {
     let offset = 0;
@@ -34,6 +46,39 @@ export default function TopBar() {
         hour12: true,
       };
       setCurrentDate(serverTime.toLocaleDateString("en-US", options));
+
+      // Calculate sessions (UTC)
+      const day = serverTime.getUTCDay(); // 0 = Sunday, 6 = Saturday
+      const hour = serverTime.getUTCHours();
+
+      // Forex is closed globally on weekends: Friday 22:00 UTC to Sunday 22:00 UTC
+      const isMarketClosed =
+        (day === 5 && hour >= 22) || // Friday night after NY close
+        day === 6 ||                 // Saturday
+        (day === 0 && hour < 22);    // Sunday morning/afternoon before Sydney open
+
+      setSessions([
+        {
+          name: "Sydney",
+          label: "SYD",
+          active: !isMarketClosed && (hour >= 22 || hour < 7),
+        },
+        {
+          name: "Tokyo",
+          label: "TYO",
+          active: !isMarketClosed && (hour >= 0 && hour < 9),
+        },
+        {
+          name: "London",
+          label: "LDN",
+          active: !isMarketClosed && (hour >= 8 && hour < 17),
+        },
+        {
+          name: "New York",
+          label: "NYC",
+          active: !isMarketClosed && (hour >= 13 && hour < 22),
+        },
+      ]);
     };
 
     // Dark Mode initialization
@@ -70,17 +115,25 @@ export default function TopBar() {
 
   return (
     <div className="w-full bg-brand-dark text-white text-xs border-b border-neutral-800 py-2.5 px-4 sm:px-6 md:px-8 flex justify-between items-center transition-colors duration-300">
-      <div className="flex items-center space-x-4">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
         <span className="font-medium tracking-wider text-neutral-400">{currentDate}</span>
-        <div className="hidden sm:flex items-center space-x-1.5 border-l border-neutral-700 pl-4">
-          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span className="text-[10px] uppercase font-bold tracking-widest text-emerald-400">Markets: Open</span>
+        
+        {/* Sessions list replacing Markets: Open */}
+        <div className="flex items-center space-x-3 sm:border-l sm:border-neutral-700 sm:pl-4 text-[9px] uppercase font-bold tracking-widest">
+          {sessions.map((s) => (
+            <div key={s.name} className="flex items-center space-x-1.5" title={`${s.name}: ${s.active ? "Active" : "Closed"}`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${s.active ? "bg-emerald-500 animate-pulse" : "bg-neutral-600"}`}></span>
+              <span className={s.active ? "text-emerald-400" : "text-neutral-500"}>
+                {s.label}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
 
-      <div className="flex items-center space-x-5">
+      <div className="flex items-center space-x-5 shrink-0">
         {/* Social Icons */}
-        <div className="flex items-center space-x-3 text-neutral-400">
+        <div className="hidden sm:flex items-center space-x-3 text-neutral-400">
           <a href="#" className="hover:text-brand-red transition-colors" aria-label="Twitter">
             <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
               <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
