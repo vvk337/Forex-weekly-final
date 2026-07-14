@@ -23,11 +23,21 @@ interface DbSponsor {
   imageUrl: string;
 }
 
+interface DbMessage {
+  id: string;
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+  createdAt: string;
+}
+
 export default function AdminDashboardPage() {
   const router = useRouter();
   const [articles, setArticles] = useState<DbArticle[]>([]);
   const [sponsors, setSponsors] = useState<DbSponsor[]>([]);
-  const [activeTab, setActiveTab] = useState<"articles" | "sponsors">("articles");
+  const [messages, setMessages] = useState<DbMessage[]>([]);
+  const [activeTab, setActiveTab] = useState<"articles" | "sponsors" | "inbox">("articles");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -40,11 +50,16 @@ export default function AdminDashboardPage() {
         if (!res.ok) throw new Error("Failed to load articles");
         const data = await res.json();
         setArticles(data);
-      } else {
+      } else if (activeTab === "sponsors") {
         const res = await fetch("/api/sponsors");
         if (!res.ok) throw new Error("Failed to load sponsored sections");
         const data = await res.json();
         setSponsors(data);
+      } else {
+        const res = await fetch("/api/contact");
+        if (!res.ok) throw new Error("Failed to load inbox messages");
+        const data = await res.json();
+        setMessages(data);
       }
     } catch (err: any) {
       setError(err.message || "Failed to load database content");
@@ -71,6 +86,25 @@ export default function AdminDashboardPage() {
       }
 
       setArticles(articles.filter((art) => art.id !== id));
+    } catch (err: any) {
+      alert(err.message || "Delete request failed");
+    }
+  };
+
+  const handleMessageDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this inbox message?")) return;
+
+    try {
+      const res = await fetch(`/api/contact?id=${id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || "Delete failed");
+      }
+
+      setMessages(messages.filter((msg) => msg.id !== id));
     } catch (err: any) {
       alert(err.message || "Delete request failed");
     }
@@ -117,7 +151,7 @@ export default function AdminDashboardPage() {
             Editorial Console
           </h1>
           <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-1">
-            Manage your financial portal publications, articles, and sponsored sections.
+            Manage your financial portal publications, articles, sponsored placements, and support inquiries.
           </p>
         </div>
 
@@ -143,7 +177,7 @@ export default function AdminDashboardPage() {
           onClick={() => setActiveTab("articles")}
           className={`py-3 px-6 text-xs uppercase font-bold tracking-wider border-b-2 transition-all cursor-pointer ${
             activeTab === "articles"
-              ? "border-brand-red text-brand-red"
+              ? "border-brand-red text-brand-red font-extrabold"
               : "border-transparent text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
           }`}
         >
@@ -153,11 +187,21 @@ export default function AdminDashboardPage() {
           onClick={() => setActiveTab("sponsors")}
           className={`py-3 px-6 text-xs uppercase font-bold tracking-wider border-b-2 transition-all cursor-pointer ${
             activeTab === "sponsors"
-              ? "border-brand-red text-brand-red"
+              ? "border-brand-red text-brand-red font-extrabold"
               : "border-transparent text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
           }`}
         >
           Sponsored Placements
+        </button>
+        <button
+          onClick={() => setActiveTab("inbox")}
+          className={`py-3 px-6 text-xs uppercase font-bold tracking-wider border-b-2 transition-all cursor-pointer ${
+            activeTab === "inbox"
+              ? "border-brand-red text-brand-red font-extrabold"
+              : "border-transparent text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
+          }`}
+        >
+          Inbox Messages
         </button>
       </div>
 
@@ -172,7 +216,7 @@ export default function AdminDashboardPage() {
           Retrieving database records...
         </div>
       ) : activeTab === "articles" ? (
-        /* ARTICLES TAB */
+        /* PUBLICATIONS TAB */
         articles.length === 0 ? (
           <div className="text-center py-12 border border-dashed border-neutral-200 dark:border-neutral-800 rounded text-neutral-400 text-xs uppercase font-bold tracking-widest">
             Database contains no publications. Click "+ New Publication" to create one.
@@ -232,7 +276,7 @@ export default function AdminDashboardPage() {
             </div>
           </div>
         )
-      ) : (
+      ) : activeTab === "sponsors" ? (
         /* SPONSORS TAB */
         <div className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded overflow-hidden">
           <div className="overflow-x-auto">
@@ -291,6 +335,66 @@ export default function AdminDashboardPage() {
             </table>
           </div>
         </div>
+      ) : (
+        /* INBOX TAB */
+        messages.length === 0 ? (
+          <div className="text-center py-12 border border-dashed border-neutral-200 dark:border-neutral-800 rounded text-neutral-400 text-xs uppercase font-bold tracking-widest">
+            Inbox is empty. No messages submitted.
+          </div>
+        ) : (
+          <div className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-neutral-100 dark:border-neutral-850 text-[10px] uppercase font-bold tracking-wider text-neutral-400 dark:text-neutral-500 bg-neutral-50 dark:bg-neutral-900/50">
+                    <th className="py-3 px-5">Sender</th>
+                    <th className="py-3 px-5">Subject</th>
+                    <th className="py-3 px-5">Message Content</th>
+                    <th className="py-3 px-5">Received At</th>
+                    <th className="py-3 px-5 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100 dark:divide-neutral-850 font-medium">
+                  {messages.map((msg) => (
+                    <tr
+                      key={msg.id}
+                      className="hover:bg-neutral-50/50 dark:hover:bg-neutral-900/20 transition-colors align-top"
+                    >
+                      <td className="py-4 px-5 shrink-0 whitespace-nowrap">
+                        <div className="font-bold text-neutral-900 dark:text-neutral-200">{msg.name}</div>
+                        <a href={`mailto:${msg.email}`} className="text-[10px] text-brand-red hover:underline block mt-0.5">
+                          {msg.email}
+                        </a>
+                      </td>
+                      <td className="py-4 px-5 max-w-[150px] truncate text-neutral-800 dark:text-neutral-300 font-semibold">
+                        {msg.subject}
+                      </td>
+                      <td className="py-4 px-5 max-w-sm text-neutral-500 dark:text-neutral-400 leading-normal text-xs whitespace-pre-wrap">
+                        {msg.message}
+                      </td>
+                      <td className="py-4 px-5 font-mono text-neutral-500 whitespace-nowrap">
+                        {new Date(msg.createdAt).toLocaleString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </td>
+                      <td className="py-4 px-5 text-right whitespace-nowrap">
+                        <button
+                          onClick={() => handleMessageDelete(msg.id)}
+                          className="text-red-500 hover:text-red-700 font-bold transition-colors cursor-pointer"
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
       )}
     </div>
   );

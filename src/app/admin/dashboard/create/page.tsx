@@ -17,6 +17,36 @@ export default function CreateArticlePage() {
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setError("");
+
+    const body = new FormData();
+    body.append("file", file);
+
+    try {
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body,
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Upload failed");
+      }
+
+      setFormData((prev) => ({ ...prev, imageUrl: data.url }));
+    } catch (err: any) {
+      setError(err.message || "Failed to upload image file");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -140,17 +170,35 @@ export default function CreateArticlePage() {
           />
         </div>
 
-        <div>
-          <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 block mb-1.5">
-            Cover Image URL (Optional)
-          </label>
-          <input
-            type="text"
-            placeholder="e.g. /images/eur-usd-chart.jpg"
-            value={formData.imageUrl}
-            onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
-            className="w-full bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded px-4 py-2 text-xs text-brand-dark dark:text-white focus:outline-none focus:border-brand-red transition-colors"
-          />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 block mb-1.5">
+              Cover Image URL (Optional)
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. /images/eur-usd-chart.jpg"
+              value={formData.imageUrl}
+              onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
+              className="w-full bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded px-4 py-2 text-xs text-brand-dark dark:text-white focus:outline-none focus:border-brand-red transition-colors font-mono text-[11px]"
+            />
+          </div>
+
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 block mb-1.5">
+              Upload Cover Image File
+            </label>
+            <div className="flex items-center space-x-3">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleFileUpload}
+                disabled={uploading}
+                className="w-full text-xs text-neutral-500 file:mr-4 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-[11px] file:font-bold file:bg-neutral-100 dark:file:bg-neutral-800 file:text-neutral-700 dark:file:text-neutral-300 hover:file:bg-neutral-200 dark:hover:file:bg-neutral-750 transition-colors cursor-pointer"
+              />
+              {uploading && <span className="text-[10px] font-bold text-brand-red animate-pulse shrink-0">Uploading...</span>}
+            </div>
+          </div>
         </div>
 
         <div>

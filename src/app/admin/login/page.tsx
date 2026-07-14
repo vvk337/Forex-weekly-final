@@ -93,12 +93,6 @@ export default function AdminLoginPage() {
         </button>
       </form>
 
-      <div className="mt-6 pt-5 border-t border-neutral-100 dark:border-neutral-800 text-[10px] text-neutral-400 text-center leading-normal">
-        <p>Default credential for first-time login:</p>
-        <p className="font-bold text-neutral-600 dark:text-neutral-300 mt-1">
-          Username: <span className="font-mono text-brand-red">admin</span> | Password: <span className="font-mono text-brand-red">admin123</span>
-        </p>
-      </div>
     </div>
   );
 }

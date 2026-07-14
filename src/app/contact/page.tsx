@@ -5,11 +5,32 @@ import React, { useState } from "react";
 export default function ContactPage() {
   const [formData, setFormData] = useState({ name: "", email: "", subject: "", message: "" });
   const [sent, setSent] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSent(true);
-    setFormData({ name: "", email: "", subject: "", message: "" });
+    setLoading(true);
+    setError("");
+
+    try {
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to submit support request.");
+      }
+
+      setSent(true);
+      setFormData({ name: "", email: "", subject: "", message: "" });
+    } catch (err: any) {
+      setError(err.message || "An error occurred. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -30,6 +51,12 @@ export default function ContactPage() {
         <div className="md:col-span-7 bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-6">
           <h3 className="font-serif font-bold text-lg text-brand-dark dark:text-white mb-4">Send a Message</h3>
           
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/30 text-red-500 p-3 rounded text-xs font-bold mb-4 leading-normal">
+              {error}
+            </div>
+          )}
+
           {sent ? (
             <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 p-4 rounded text-xs font-bold">
               Message received. Our editorial team will review and reply within 24 hours.
@@ -91,9 +118,10 @@ export default function ContactPage() {
 
               <button
                 type="submit"
-                className="bg-brand-red hover:bg-brand-red-dark text-white text-xs font-bold uppercase tracking-wider px-5 py-3 rounded-sm transition-colors cursor-pointer"
+                disabled={loading}
+                className="bg-brand-red hover:bg-brand-red-dark text-white text-xs font-bold uppercase tracking-wider px-5 py-3 rounded-sm transition-colors cursor-pointer disabled:opacity-50"
               >
-                Send Message
+                {loading ? "Sending..." : "Send Message"}
               </button>
             </form>
           )}

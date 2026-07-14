@@ -31,11 +31,20 @@ model Article {
 }
 
 model Sponsor {
-  id          String   @id // e.g., "leaderboard", "square", "inline"
+  id          String   @id // e.g. "leaderboard", "square", "inline"
   title       String
   description String
   linkUrl     String
   buttonText  String
   imageUrl    String   @default("")
   updatedAt   DateTime @updatedAt
+}
+
+model ContactMessage {
+  id        String   @id @default(uuid())
+  name      String
+  email     String
+  subject   String
+  message   String
+  createdAt DateTime @default(now())
 }

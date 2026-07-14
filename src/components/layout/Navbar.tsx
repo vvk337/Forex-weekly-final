@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 interface NavItem {
   label: string;
@@ -22,8 +22,10 @@ const navItems: NavItem[] = [
 
 export default function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     const handleScroll = () => {
@@ -41,6 +43,16 @@ export default function Navbar() {
   useEffect(() => {
     setIsMobileMenuOpen(false);
   }, [pathname]);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      router.push(`/?search=${encodeURIComponent(searchQuery.trim())}`);
+      setSearchQuery("");
+    } else {
+      router.push("/");
+    }
+  };
 
   return (
     <nav
@@ -83,11 +95,28 @@ export default function Navbar() {
           </Link>
         </div>
 
-        {/* Action Button */}
-        <div className="hidden md:block">
+        {/* Action Button & Search */}
+        <div className="hidden md:flex items-center space-x-4">
+          {/* Search bar */}
+          <form onSubmit={handleSearch} className="relative flex items-center">
+            <input
+              type="text"
+              placeholder="Search articles..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-850 text-brand-dark dark:text-neutral-200 rounded-sm pl-8 pr-3 py-1.5 text-xs w-40 focus:w-56 focus:outline-none focus:border-brand-red transition-all"
+            />
+            <button type="submit" className="absolute left-2.5 text-neutral-400 hover:text-brand-red transition-colors" aria-label="Search button">
+              <svg className="w-3.5 h-3.5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+            </button>
+          </form>
+
           <Link
             href="/free-assessment"
-            className="inline-flex items-center justify-center bg-brand-red hover:bg-brand-red-dark text-white text-xs font-bold uppercase tracking-wider py-2.5 px-4 border border-brand-red hover:border-brand-red-dark rounded-sm transition-all duration-300 hover:-translate-y-[1px] hover:shadow-lg cursor-pointer"
+            className="inline-flex items-center justify-center bg-brand-red hover:bg-brand-red-dark text-white text-xs font-bold uppercase tracking-wider py-2.5 px-4 border border-brand-red hover:border-brand-red-dark rounded-sm transition-all duration-300 hover:-translate-y-[1px] hover:shadow-lg cursor-pointer shrink-0"
           >
             Get Free Assessment
           </Link>
@@ -123,6 +152,23 @@ export default function Navbar() {
         }`}
       >
         <div className="flex flex-col space-y-3 px-4">
+          {/* Mobile Search */}
+          <form onSubmit={handleSearch} className="relative flex items-center mb-2">
+            <input
+              type="text"
+              placeholder="Search articles..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-850 text-brand-dark dark:text-neutral-200 rounded-sm pl-8 pr-3 py-2 text-xs w-full focus:outline-none focus:border-brand-red"
+            />
+            <button type="submit" className="absolute left-2.5 text-neutral-400" aria-label="Mobile search button">
+              <svg className="w-3.5 h-3.5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+            </button>
+          </form>
+
           {navItems.map((item) => {
             const isActive = pathname === item.href;
             return (
