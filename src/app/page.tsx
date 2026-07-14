@@ -9,6 +9,7 @@ import ForexRatesWidget from "@/components/widgets/ForexRatesWidget";
 import EconomicCalendarWidget from "@/components/widgets/EconomicCalendarWidget";
 import NewsletterSection from "@/components/ui/NewsletterSection";
 import TradingSessionsWidget from "@/components/widgets/TradingSessionsWidget";
+import TradingViewTechnicalAnalysisWidget from "@/components/widgets/TradingViewTechnicalAnalysisWidget";
 
 interface HomePageProps {
   searchParams: Promise<{
@@ -239,41 +240,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               {/* Square Ad Banner Sponsor (300x250) */}
               <AdBanner size="square" />
 
-              {dailyFeedArticles.length > 0 && (
-                /* Daily Technical Feed Quick List */
-                <div className="bg-neutral-50 dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-5 transition-colors">
-                  <h3 className="font-serif font-bold text-sm tracking-wider uppercase text-brand-dark dark:text-neutral-100 border-b border-neutral-200 dark:border-neutral-800 pb-3 mb-4 flex justify-between items-center">
-                    <span>Daily Technical Feed</span>
-                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping"></span>
-                  </h3>
-                  
-                  <div className="flex flex-col divide-y divide-neutral-100 dark:divide-neutral-850/55">
-                    {dailyFeedArticles.map((art) => (
-                      <div key={art.id} className="py-3.5 first:pt-0 last:pb-0 group">
-                        <span className="text-[9px] font-extrabold text-amber-500 uppercase tracking-widest block mb-0.5">
-                          {art.publishedAt}
-                        </span>
-                        <Link
-                          href={`/daily-feed/${art.id}`}
-                          className="font-serif font-bold text-xs sm:text-sm text-neutral-800 dark:text-neutral-200 group-hover:text-brand-red dark:group-hover:text-brand-red transition-colors cursor-pointer"
-                        >
-                          {art.title}
-                        </Link>
-                        <p className="text-[11px] text-neutral-500 line-clamp-2 mt-1 leading-normal">
-                          {art.excerpt}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-
-                  <Link
-                    href="/daily-feed"
-                    className="block text-center text-xs font-bold text-brand-red mt-5 hover:underline"
-                  >
-                    View Daily Feed Archive &rarr;
-                  </Link>
-                </div>
-              )}
+              {/* Technical Analysis widget replacing the Daily Technical Feed box */}
+              <TradingViewTechnicalAnalysisWidget />
 
               {/* Sponsored Links / Recommendations Block */}
               <div className="bg-neutral-50 dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-5 transition-colors text-xs space-y-4">
