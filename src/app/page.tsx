@@ -8,6 +8,7 @@ import BreakingNewsBar from "@/components/widgets/BreakingNewsBar";
 import ForexRatesWidget from "@/components/widgets/ForexRatesWidget";
 import EconomicCalendarWidget from "@/components/widgets/EconomicCalendarWidget";
 import NewsletterSection from "@/components/ui/NewsletterSection";
+import TradingSessionsWidget from "@/components/widgets/TradingSessionsWidget";
 
 interface HomePageProps {
   searchParams: Promise<{
@@ -297,29 +298,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               <AdBanner size="inline" />
 
               {/* Trading Session status indicator widget */}
-              <div className="bg-neutral-50 dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-5 transition-colors">
-                <h3 className="font-serif font-bold text-sm tracking-wider uppercase text-brand-dark dark:text-neutral-100 border-b border-neutral-200 dark:border-neutral-800 pb-3 mb-4">
-                  Trading Session Status
-                </h3>
-                <div className="space-y-3">
-                  {[
-                    { name: "London Session", active: true, color: "text-emerald-500" },
-                    { name: "New York Session", active: true, color: "text-emerald-500" },
-                    { name: "Tokyo Session", active: false, color: "text-neutral-400" },
-                    { name: "Sydney Session", active: false, color: "text-neutral-400" },
-                  ].map((ses, idx) => (
-                    <div key={idx} className="flex justify-between items-center text-xs font-semibold">
-                      <span className="text-neutral-700 dark:text-neutral-300">{ses.name}</span>
-                      <div className="flex items-center space-x-1.5">
-                        <span className={`h-2.5 w-2.5 rounded-full ${ses.active ? "bg-emerald-500 animate-pulse" : "bg-neutral-400"}`}></span>
-                        <span className={`text-[10px] uppercase font-bold tracking-wider ${ses.color}`}>
-                          {ses.active ? "Active" : "Closed"}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <TradingSessionsWidget />
 
             </aside>
           </div>
