@@ -1,0 +1,41 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Admin {
+  id        String   @id @default(uuid())
+  username  String   @unique
+  password  String   // Hashed password
+  createdAt DateTime @default(now())
+}
+
+model Article {
+  id          String   @id @default(uuid())
+  title       String
+  excerpt     String
+  content     String
+  category    String   // 'weekly-updates', 'daily-feed', 'global-events', 'forex', 'learn-forex'
+  publishedAt DateTime @default(now())
+  author      String
+  imageUrl    String
+  isFeatured  Boolean  @default(false)
+  updatedAt   DateTime @updatedAt
+}
+
+model Sponsor {
+  id          String   @id // e.g., "leaderboard", "square", "inline"
+  title       String
+  description String
+  linkUrl     String
+  buttonText  String
+  imageUrl    String   @default("")
+  updatedAt   DateTime @updatedAt
+}
