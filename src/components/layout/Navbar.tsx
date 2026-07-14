@@ -64,14 +64,14 @@ export default function Navbar() {
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 flex justify-between items-center">
         {/* Navigation Links - Desktop */}
-        <div className="hidden md:flex items-center space-x-6 lg:space-x-8">
+        <div className="hidden md:flex items-center space-x-3 lg:space-x-4 xl:space-x-6 mr-4 flex-nowrap shrink">
           {navItems.map((item) => {
             const isActive = pathname === item.href;
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`relative py-1 text-xs lg:text-sm font-bold uppercase tracking-wider transition-all duration-200 group cursor-pointer ${
+                className={`relative py-1 text-[10px] lg:text-[11px] xl:text-xs font-extrabold uppercase tracking-wider transition-all duration-200 group cursor-pointer whitespace-nowrap ${
                   isActive
                     ? "text-brand-red"
                     : "text-brand-dark hover:text-brand-red dark:text-neutral-200 dark:hover:text-brand-red"
@@ -96,15 +96,15 @@ export default function Navbar() {
         </div>
 
         {/* Action Button & Search */}
-        <div className="hidden md:flex items-center space-x-4">
+        <div className="hidden md:flex items-center space-x-3 lg:space-x-4 shrink-0">
           {/* Search bar */}
           <form onSubmit={handleSearch} className="relative flex items-center">
             <input
               type="text"
-              placeholder="Search articles..."
+              placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-850 text-brand-dark dark:text-neutral-200 rounded-sm pl-8 pr-3 py-1.5 text-xs w-40 focus:w-56 focus:outline-none focus:border-brand-red transition-all"
+              className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-850 text-brand-dark dark:text-neutral-200 rounded-sm pl-8 pr-3 py-1.5 text-[10px] lg:text-[11px] w-24 lg:w-32 xl:w-40 focus:w-32 lg:focus:w-44 xl:focus:w-48 focus:outline-none focus:border-brand-red transition-all"
             />
             <button type="submit" className="absolute left-2.5 text-neutral-400 hover:text-brand-red transition-colors" aria-label="Search button">
               <svg className="w-3.5 h-3.5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
@@ -116,7 +116,7 @@ export default function Navbar() {
 
           <Link
             href="/free-assessment"
-            className="inline-flex items-center justify-center bg-brand-red hover:bg-brand-red-dark text-white text-xs font-bold uppercase tracking-wider py-2.5 px-4 border border-brand-red hover:border-brand-red-dark rounded-sm transition-all duration-300 hover:-translate-y-[1px] hover:shadow-lg cursor-pointer shrink-0"
+            className="inline-flex items-center justify-center bg-brand-red hover:bg-brand-red-dark text-white text-[10px] lg:text-[11px] font-bold uppercase tracking-wider py-2 px-3 lg:py-2.5 lg:px-4 border border-brand-red hover:border-brand-red-dark rounded-sm transition-all duration-300 hover:-translate-y-[1px] hover:shadow-lg cursor-pointer shrink-0"
           >
             Get Free Assessment
           </Link>
@@ -156,7 +156,7 @@ export default function Navbar() {
           <form onSubmit={handleSearch} className="relative flex items-center mb-2">
             <input
               type="text"
-              placeholder="Search articles..."
+              placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-850 text-brand-dark dark:text-neutral-200 rounded-sm pl-8 pr-3 py-2 text-xs w-full focus:outline-none focus:border-brand-red"
