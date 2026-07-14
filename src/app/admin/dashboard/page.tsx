@@ -39,6 +39,23 @@ interface TickerItem {
   isDirty?: boolean;
 }
 
+interface DbUser {
+  id: string;
+  fullName: string;
+  username: string;
+  email: string;
+  role: string;
+  status: string;
+  profilePhoto: string;
+  departments: string[];
+  workspaces: string[];
+  lastLogin: string | null;
+  lastActivity: string | null;
+  isOnline: boolean;
+  isArchived: boolean;
+  activeSince: string;
+}
+
 export default function AdminDashboardPage() {
   const router = useRouter();
   const [articles, setArticles] = useState<DbArticle[]>([]);
@@ -51,9 +68,21 @@ export default function AdminDashboardPage() {
   const [savingTicker, setSavingTicker] = useState(false);
   const [tickerMessage, setTickerMessage] = useState("");
 
-  const [activeTab, setActiveTab] = useState<"articles" | "sponsors" | "inbox" | "ticker">("articles");
+  const [activeTab, setActiveTab] = useState<"articles" | "sponsors" | "inbox" | "ticker" | "users">("articles");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  // Users directory states
+  const [users, setUsers] = useState<DbUser[]>([]);
+  const [usersTotal, setUsersTotal] = useState(0);
+  const [usersPage, setUsersPage] = useState(1);
+  const [usersSearch, setUsersSearch] = useState("");
+  const [usersRoleFilter, setUsersRoleFilter] = useState("");
+  const [usersStatusFilter, setUsersStatusFilter] = useState("");
+  const [usersDeptFilter, setUsersDeptFilter] = useState("");
+  const [usersArchivedFilter, setUsersArchivedFilter] = useState(false);
+  const [usersSort, setUsersSort] = useState("fullName");
+  const [usersOrder, setUsersOrder] = useState<"asc" | "desc">("asc");
 
   const fetchData = async () => {
     setLoading(true);
@@ -99,6 +128,23 @@ export default function AdminDashboardPage() {
           parsed.push({ text: "", expiryOption: "infinity", expiresAt: null });
         }
         setTickerItems(parsed);
+      } else if (activeTab === "users") {
+        const queryParams = new URLSearchParams({
+          search: usersSearch,
+          role: usersRoleFilter,
+          status: usersStatusFilter,
+          department: usersDeptFilter,
+          archived: usersArchivedFilter ? "true" : "false",
+          sort: usersSort,
+          order: usersOrder,
+          page: usersPage.toString(),
+          limit: "10",
+        });
+        const res = await fetch(`/api/users?${queryParams}`);
+        if (!res.ok) throw new Error("Failed to load users list");
+        const data = await res.json();
+        setUsers(data.users);
+        setUsersTotal(data.total);
       }
     } catch (err: any) {
       setError(err.message || "Failed to load database content");
@@ -109,7 +155,45 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     fetchData();
-  }, [activeTab]);
+  }, [
+    activeTab,
+    usersPage,
+    usersRoleFilter,
+    usersStatusFilter,
+    usersDeptFilter,
+    usersArchivedFilter,
+    usersSort,
+    usersOrder
+  ]);
+
+  // Triggers search fetch
+  const handleUsersSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setUsersPage(1);
+    fetchData();
+  };
+
+  const handleArchiveToggle = async (id: string, currentlyArchived: boolean) => {
+    const actionText = currentlyArchived ? "restore" : "archive";
+    if (!confirm(`Are you sure you want to ${actionText} this user?`)) return;
+
+    try {
+      const res = await fetch(`/api/users/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isArchived: !currentlyArchived }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || `${actionText} operation failed`);
+      }
+
+      fetchData();
+    } catch (err: any) {
+      alert(err.message || `Failed to ${actionText} user`);
+    }
+  };
 
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this publication?")) return;
@@ -263,19 +347,36 @@ export default function AdminDashboardPage() {
         </div>
 
         <div className="flex items-center space-x-3 shrink-0">
+        {activeTab === "users" ? (
+          <>
+            <Link
+              href="/admin/dashboard/profile"
+              className="inline-flex items-center border border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-900 text-neutral-650 dark:text-neutral-350 hover:text-neutral-800 dark:hover:text-neutral-100 text-xs font-bold uppercase tracking-wider py-2.5 px-4 rounded-sm transition-all"
+            >
+              My Profile
+            </Link>
+            <Link
+              href="/admin/dashboard/users/create"
+              className="inline-flex items-center bg-brand-red hover:bg-brand-red-dark text-white text-xs font-bold uppercase tracking-wider py-2.5 px-4 rounded-sm transition-all"
+            >
+              + Add User
+            </Link>
+          </>
+        ) : (
           <Link
             href="/admin/dashboard/create"
             className="inline-flex items-center bg-brand-red hover:bg-brand-red-dark text-white text-xs font-bold uppercase tracking-wider py-2.5 px-4 rounded-sm transition-all"
           >
             + New Publication
           </Link>
-          <button
-            onClick={handleLogout}
-            className="border border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-900 text-neutral-600 dark:text-neutral-300 text-xs font-bold uppercase tracking-wider py-2.5 px-4 rounded-sm transition-colors cursor-pointer"
-          >
-            Log Out
-          </button>
-        </div>
+        )}
+        <button
+          onClick={handleLogout}
+          className="border border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-900 text-neutral-655 dark:text-neutral-355 hover:text-neutral-800 dark:hover:text-neutral-100 text-xs font-bold uppercase tracking-wider py-2.5 px-4 rounded-sm transition-colors cursor-pointer"
+        >
+          Log Out
+        </button>
+      </div>
       </div>
 
       {/* Tabs */}
@@ -311,16 +412,29 @@ export default function AdminDashboardPage() {
           Breaking News
         </button>
         <button
-          onClick={() => setActiveTab("inbox")}
-          className={`py-3 px-6 text-xs uppercase font-bold tracking-wider border-b-2 transition-all cursor-pointer ${
-            activeTab === "inbox"
-              ? "border-brand-red text-brand-red font-extrabold"
-              : "border-transparent text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
-          }`}
-        >
-          Inbox Messages
-        </button>
-      </div>
+        onClick={() => setActiveTab("inbox")}
+        className={`py-3 px-6 text-xs uppercase font-bold tracking-wider border-b-2 transition-all cursor-pointer ${
+          activeTab === "inbox"
+            ? "border-brand-red text-brand-red font-extrabold"
+            : "border-transparent text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
+        }`}
+      >
+        Inbox Messages
+      </button>
+      <button
+        onClick={() => {
+          setUsersPage(1);
+          setActiveTab("users");
+        }}
+        className={`py-3 px-6 text-xs uppercase font-bold tracking-wider border-b-2 transition-all cursor-pointer ${
+          activeTab === "users"
+            ? "border-brand-red text-brand-red font-extrabold"
+            : "border-transparent text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
+        }`}
+      >
+        Users
+      </button>
+    </div>
 
       {error && (
         <div className="bg-red-500/10 border border-red-500/30 text-red-500 p-4 rounded text-xs font-bold">
@@ -633,7 +747,7 @@ export default function AdminDashboardPage() {
             </button>
           </div>
         </form>
-      ) : (
+      ) : activeTab === "inbox" ? (
         /* INBOX TAB */
         messages.length === 0 ? (
           <div className="text-center py-12 border border-dashed border-neutral-200 dark:border-neutral-800 rounded text-neutral-400 text-xs uppercase font-bold tracking-widest">
@@ -693,6 +807,228 @@ export default function AdminDashboardPage() {
             </div>
           </div>
         )
+      ) : (
+        /* USERS TAB */
+        <div className="space-y-6">
+          {/* Users Search, Sorting, and Filters Row */}
+          <div className="bg-neutral-50 dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-4 flex flex-col md:flex-row md:items-center gap-4 transition-colors">
+            <form onSubmit={handleUsersSearchSubmit} className="flex-grow flex items-center space-x-2">
+              <input
+                type="text"
+                placeholder="Search users by name, username, or email..."
+                value={usersSearch}
+                onChange={(e) => setUsersSearch(e.target.value)}
+                className="flex-grow bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-850 text-brand-dark dark:text-neutral-200 rounded-sm px-3.5 py-1.5 text-xs focus:outline-none focus:border-brand-red transition-all"
+              />
+              <button
+                type="submit"
+                className="bg-brand-red hover:bg-brand-red-dark text-white text-xs font-bold uppercase tracking-wider px-4 py-1.5 rounded-sm transition-colors cursor-pointer"
+              >
+                Search
+              </button>
+            </form>
+
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Filter by Role */}
+              <select
+                value={usersRoleFilter}
+                onChange={(e) => {
+                  setUsersPage(1);
+                  setUsersRoleFilter(e.target.value);
+                }}
+                className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-850 rounded px-2.5 py-1.5 text-xs text-brand-dark dark:text-neutral-200 font-semibold focus:outline-none cursor-pointer"
+              >
+                <option value="">All Roles</option>
+                <option value="OWNER">Owner</option>
+                <option value="ADMIN">Admin</option>
+                <option value="SUPERVISOR">Supervisor</option>
+                <option value="EMPLOYEE">Employee</option>
+              </select>
+
+              {/* Filter by Status */}
+              <select
+                value={usersStatusFilter}
+                onChange={(e) => {
+                  setUsersPage(1);
+                  setUsersStatusFilter(e.target.value);
+                }}
+                className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-850 rounded px-2.5 py-1.5 text-xs text-brand-dark dark:text-neutral-200 font-semibold focus:outline-none cursor-pointer"
+              >
+                <option value="">All Statuses</option>
+                <option value="ACTIVE">Active</option>
+                <option value="INACTIVE">Inactive</option>
+                <option value="SUSPENDED">Suspended</option>
+              </select>
+
+              {/* Filter by Archive Status */}
+              <label className="flex items-center space-x-1.5 text-xs font-bold text-neutral-600 dark:text-neutral-300 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={usersArchivedFilter}
+                  onChange={(e) => {
+                    setUsersPage(1);
+                    setUsersArchivedFilter(e.target.checked);
+                  }}
+                  className="accent-brand-red cursor-pointer"
+                />
+                <span>Show Archived</span>
+              </label>
+
+              {/* Sort Controls */}
+              <select
+                value={`${usersSort}-${usersOrder}`}
+                onChange={(e) => {
+                  const [sort, order] = e.target.value.split("-");
+                  setUsersSort(sort);
+                  setUsersOrder(order as "asc" | "desc");
+                }}
+                className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-850 rounded px-2.5 py-1.5 text-xs text-brand-dark dark:text-neutral-200 font-semibold focus:outline-none cursor-pointer"
+              >
+                <option value="fullName-asc">Sort: Name A-Z</option>
+                <option value="fullName-desc">Sort: Name Z-A</option>
+                <option value="role-asc">Sort: Role A-Z</option>
+                <option value="activeSince-desc">Sort: Date Joined</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Users Grid Table */}
+          {users.length === 0 ? (
+            <div className="text-center py-12 border border-dashed border-neutral-200 dark:border-neutral-800 rounded text-neutral-400 text-xs uppercase font-bold tracking-widest">
+              No users found matching your filter criteria.
+            </div>
+          ) : (
+            <div className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-neutral-100 dark:border-neutral-850 text-[10px] uppercase font-bold tracking-wider text-neutral-400 dark:text-neutral-500 bg-neutral-50 dark:bg-neutral-900/50">
+                      <th className="py-3 px-5">Photo</th>
+                      <th className="py-3 px-5">User Details</th>
+                      <th className="py-3 px-5">Role</th>
+                      <th className="py-3 px-5">Status</th>
+                      <th className="py-3 px-5">Departments</th>
+                      <th className="py-3 px-5">Last Activity</th>
+                      <th className="py-3 px-5 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-100 dark:divide-neutral-850 font-medium">
+                    {users.map((u) => (
+                      <tr
+                        key={u.id}
+                        className="hover:bg-neutral-50/50 dark:hover:bg-neutral-900/20 transition-colors align-middle"
+                      >
+                        <td className="py-3.5 px-5 shrink-0">
+                          <img
+                            src={u.profilePhoto || "/images/default-avatar.png"}
+                            alt={u.fullName}
+                            className="h-8 w-8 rounded-full object-cover border border-neutral-200 dark:border-neutral-850 bg-white"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = "/images/default-avatar.png";
+                            }}
+                          />
+                        </td>
+                        <td className="py-3.5 px-5">
+                          <div className="font-bold text-neutral-900 dark:text-neutral-200 text-sm">
+                            {u.fullName}
+                          </div>
+                          <div className="text-[10.5px] text-neutral-450 mt-0.5 font-mono">
+                            @{u.username} &bull; {u.email}
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-5 shrink-0 whitespace-nowrap">
+                          <span className={`text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 border rounded-sm ${
+                            u.role === "OWNER"
+                              ? "bg-red-500/10 text-red-600 border-red-500/20"
+                              : u.role === "ADMIN"
+                              ? "bg-blue-500/10 text-blue-600 border-blue-500/20"
+                              : u.role === "SUPERVISOR"
+                              ? "bg-purple-500/10 text-purple-650 border-purple-500/20"
+                              : "bg-neutral-100 text-neutral-600 border-neutral-200 dark:bg-neutral-900/50 dark:text-neutral-400 dark:border-neutral-850"
+                          }`}>
+                            {u.role}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-5 shrink-0 whitespace-nowrap">
+                          <div className="flex items-center space-x-1.5">
+                            <span className={`h-1.5 w-1.5 rounded-full ${
+                              u.status === "ACTIVE"
+                                ? "bg-emerald-500"
+                                : u.status === "SUSPENDED"
+                                ? "bg-rose-500"
+                                : "bg-neutral-500"
+                            }`}></span>
+                            <span className="text-xs uppercase font-extrabold tracking-wide text-neutral-600 dark:text-neutral-400">
+                              {u.status}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-5 text-neutral-500">
+                          {u.departments && u.departments.length > 0 ? (
+                            <span className="text-xs font-semibold">{u.departments.join(", ")}</span>
+                          ) : (
+                            <span className="text-[10px] text-neutral-400 italic">None</span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-5 font-mono text-neutral-500 whitespace-nowrap">
+                          {u.lastActivity ? (
+                            new Date(u.lastActivity).toLocaleString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          ) : (
+                            <span className="text-neutral-400">Never</span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-5 text-right space-x-3.5 whitespace-nowrap">
+                          <Link
+                            href={`/admin/dashboard/users/${u.id}`}
+                            className="text-brand-red hover:underline font-bold cursor-pointer"
+                          >
+                            Edit/Details
+                          </Link>
+                          <button
+                            onClick={() => handleArchiveToggle(u.id, u.isArchived)}
+                            className="text-neutral-500 hover:text-red-600 font-bold transition-colors cursor-pointer"
+                          >
+                            {u.isArchived ? "Restore" : "Archive"}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination Footer */}
+              {usersTotal > 10 && (
+                <div className="bg-neutral-50 dark:bg-neutral-900/50 px-5 py-3 border-t border-neutral-100 dark:border-neutral-850 flex items-center justify-between">
+                  <span className="text-neutral-500 text-xs">
+                    Showing {(usersPage - 1) * 10 + 1} - {Math.min(usersPage * 10, usersTotal)} of {usersTotal} Users
+                  </span>
+                  <div className="flex space-x-2">
+                    <button
+                      disabled={usersPage <= 1}
+                      onClick={() => setUsersPage(usersPage - 1)}
+                      className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-850 text-neutral-600 dark:text-neutral-300 px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-sm disabled:opacity-50 cursor-pointer"
+                    >
+                      Prev
+                    </button>
+                    <button
+                      disabled={usersPage * 10 >= usersTotal}
+                      onClick={() => setUsersPage(usersPage + 1)}
+                      className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-850 text-neutral-600 dark:text-neutral-300 px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-sm disabled:opacity-50 cursor-pointer"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

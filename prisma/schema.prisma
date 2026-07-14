@@ -56,3 +56,39 @@ model TickerConfig {
   manualText String   @default("")          // Custom text written by admin (e.g., "Alert 1 | Alert 2")
   updatedAt  DateTime @updatedAt
 }
+
+model User {
+  id                  String   @id @default(uuid())
+  fullName            String
+  username            String   @unique
+  email               String   @unique
+  password            String   // Hashed password
+  role                String   @default("EMPLOYEE") // OWNER, ADMIN, SUPERVISOR, EMPLOYEE
+  status              String   @default("ACTIVE") // ACTIVE, INACTIVE, SUSPENDED
+  profilePhoto        String   @default("/images/default-avatar.png")
+  departments         String   @default("[]") // Serialized JSON string array
+  workspaces          String   @default("[]") // Serialized JSON string array
+  permissions         String   @default("[]") // Serialized JSON string array (future permission tags)
+  phone               String   @default("")
+  dob                 String   @default("")
+  activeSince         DateTime @default(now())
+  lastLogin           DateTime?
+  lastActivity        DateTime?
+  isOnline            Boolean  @default(false)
+  isArchived          Boolean  @default(false)
+  createdBy           String   @default("System")
+  updatedAt           DateTime @updatedAt
+  forcePasswordChange Boolean  @default(false)
+  tempPassword        String   @default("")
+}
+
+model UserSession {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+}

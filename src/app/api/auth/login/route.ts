@@ -14,7 +14,25 @@ export async function POST(request: Request) {
       );
     }
 
-    // Auto-seed default admin if database table is empty (Self-healing mechanism)
+    // Auto-seed default OWNER in User table if empty (Self-healing mechanism)
+    const userCount = await prisma.user.count();
+    if (userCount === 0) {
+      const hashedPassword = await bcrypt.hash("admin123", 10);
+      await prisma.user.create({
+        data: {
+          fullName: "System Owner",
+          username: "admin",
+          email: "owner@forexweekly.com",
+          password: hashedPassword,
+          role: "OWNER",
+          status: "ACTIVE",
+          departments: JSON.stringify(["Editorial"]),
+          workspaces: JSON.stringify(["Publication"]),
+        },
+      });
+    }
+
+    // Auto-seed legacy Admin table for database backward compatibility
     const adminCount = await prisma.admin.count();
     if (adminCount === 0) {
       const hashedPassword = await bcrypt.hash("admin123", 10);
@@ -26,20 +44,39 @@ export async function POST(request: Request) {
       });
     }
 
-    // Lookup user in DB
-    const admin = await prisma.admin.findUnique({
+    // Lookup user in DB User table first
+    const dbUser = await prisma.user.findUnique({
       where: { username },
     });
 
-    if (!admin) {
-      return NextResponse.json(
-        { error: "Invalid username or password" },
-        { status: 401 }
-      );
+    let targetUserPassword = "";
+    let isLegacyAdmin = false;
+
+    if (dbUser) {
+      if (dbUser.isArchived) {
+        return NextResponse.json(
+          { error: "Your account has been archived. Access denied." },
+          { status: 403 }
+        );
+      }
+      targetUserPassword = dbUser.password;
+    } else {
+      // Fallback: Check legacy Admin table
+      const legacyAdmin = await prisma.admin.findUnique({
+        where: { username },
+      });
+      if (!legacyAdmin) {
+        return NextResponse.json(
+          { error: "Invalid username or password" },
+          { status: 401 }
+        );
+      }
+      targetUserPassword = legacyAdmin.password;
+      isLegacyAdmin = true;
     }
 
     // Verify password
-    const isPasswordValid = await bcrypt.compare(password, admin.password);
+    const isPasswordValid = await bcrypt.compare(password, targetUserPassword);
     if (!isPasswordValid) {
       return NextResponse.json(
         { error: "Invalid username or password" },
@@ -47,8 +84,20 @@ export async function POST(request: Request) {
       );
     }
 
+    // Update login status for User model
+    if (dbUser && !isLegacyAdmin) {
+      await prisma.user.update({
+        where: { id: dbUser.id },
+        data: {
+          lastLogin: new Date(),
+          lastActivity: new Date(),
+          isOnline: true,
+        },
+      });
+    }
+
     // Generate JWT
-    const token = await signJWT({ username: admin.username });
+    const token = await signJWT({ username });
 
     // Set cookie response
     const response = NextResponse.json(
