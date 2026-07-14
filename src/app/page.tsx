@@ -99,217 +99,231 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       {/* 2. Live TradingView Ticker Tape Widget (Full Width) */}
       <ForexRatesWidget />
 
-      {/* Search Header Banner */}
-      {search && (
-        <div className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded p-4 flex justify-between items-center transition-colors">
-          <div className="text-xs">
-            Viewing search results for: <strong className="text-brand-red font-bold font-mono text-sm">"{search}"</strong>
-            <span className="text-neutral-400 ml-2">({articles.length} publications found)</span>
+      {search ? (
+        /* Render search results in list card (horizontal layout) format */
+        <div className="space-y-6">
+          <div className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded p-4 flex justify-between items-center transition-colors">
+            <div className="text-xs">
+              Viewing search results for: <strong className="text-brand-red font-bold font-mono text-sm">"{search}"</strong>
+              <span className="text-neutral-400 ml-2">({articles.length} publications found)</span>
+            </div>
+            <Link href="/" className="text-xs font-bold text-neutral-400 hover:text-brand-red uppercase tracking-wider">
+              Clear Search
+            </Link>
           </div>
-          <Link href="/" className="text-xs font-bold text-neutral-400 hover:text-brand-red uppercase tracking-wider">
-            Clear Search
-          </Link>
-        </div>
-      )}
 
-      {/* 3. Main Multi-Column Editorial Grid */}
-      {articles.length === 0 ? (
-        <div className="text-center py-16 border border-neutral-100 dark:border-neutral-850 rounded text-neutral-400 text-xs font-bold uppercase tracking-widest bg-neutral-50/50 dark:bg-neutral-900/10">
-          No articles match your search parameters. Try searching for other terms like "fed", "inflation", or "rates".
+          {articles.length === 0 ? (
+            <div className="text-center py-16 border border-neutral-100 dark:border-neutral-850 rounded text-neutral-400 text-xs font-bold uppercase tracking-widest bg-neutral-50/50 dark:bg-neutral-900/10">
+              No articles match your search parameters. Try searching for other terms like "fed", "inflation", or "rates".
+            </div>
+          ) : (
+            <div className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-6 divide-y divide-neutral-100 dark:divide-neutral-850/55">
+              {articles.map((art) => (
+                <ArticleCard key={art.id} article={art} layout="horizontal" />
+              ))}
+            </div>
+          )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          
-          {/* Left Column (8 Cols on large screens) */}
-          <div className="lg:col-span-8 space-y-8">
+        /* Render normal homepage grid */
+        articles.length === 0 ? (
+          <div className="text-center py-16 border border-neutral-100 dark:border-neutral-850 rounded text-neutral-400 text-xs font-bold uppercase tracking-widest bg-neutral-50/50 dark:bg-neutral-900/10">
+            No articles found.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             
-            {/* Large Hero Featured Article - only show if there is an article matching featured status or when not filtering */}
-            {featuredArticle && (
-              <div className="border border-neutral-200 dark:border-neutral-800 rounded overflow-hidden group hover:border-neutral-300 dark:hover:border-neutral-700 transition-all duration-300 bg-white dark:bg-brand-dark-card">
-                {/* Visual Featured Image Placeholder */}
-                <Link href={`/${featuredArticle.category}/${featuredArticle.id}`} className="relative block h-72 sm:h-96 w-full bg-neutral-100 dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-800 overflow-hidden cursor-pointer">
-                  <div className="absolute inset-0 bg-neutral-200 dark:bg-neutral-800 flex items-center justify-center">
-                    <span className="text-5xl font-bold font-serif opacity-20 select-none text-neutral-600 tracking-wider">FEATURED REPORT</span>
-                  </div>
-                  <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-neutral-950/20 to-transparent"></div>
+            {/* Left Column (8 Cols on large screens) */}
+            <div className="lg:col-span-8 space-y-8">
+              
+              {/* Large Hero Featured Article */}
+              {featuredArticle && (
+                <div className="border border-neutral-200 dark:border-neutral-800 rounded overflow-hidden group hover:border-neutral-300 dark:hover:border-neutral-700 transition-all duration-300 bg-white dark:bg-brand-dark-card">
+                  {/* Visual Featured Image Placeholder */}
+                  <Link href={`/${featuredArticle.category}/${featuredArticle.id}`} className="relative block h-72 sm:h-96 w-full bg-neutral-100 dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-800 overflow-hidden cursor-pointer">
+                    <div className="absolute inset-0 bg-neutral-200 dark:bg-neutral-800 flex items-center justify-center">
+                      <span className="text-5xl font-bold font-serif opacity-20 select-none text-neutral-600 tracking-wider">FEATURED REPORT</span>
+                    </div>
+                    <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-neutral-950/20 to-transparent"></div>
+                    
+                    {/* Overlay Metadata */}
+                    <div className="absolute bottom-6 left-6 right-6 text-white space-y-2">
+                      <span className="bg-brand-red text-white text-[9px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-sm">
+                        WEEKLY INTELLIGENCE REPORT
+                      </span>
+                      <h2 className="font-serif font-bold text-xl sm:text-2xl md:text-3xl leading-tight group-hover:text-neutral-200 transition-colors">
+                        {featuredArticle.title}
+                      </h2>
+                      <div className="flex items-center space-x-4 text-[10px] text-neutral-300 pt-1">
+                        <span>By <strong>{featuredArticle.author}</strong></span>
+                        <span>&bull;</span>
+                        <span>{featuredArticle.publishedAt}</span>
+                        <span>&bull;</span>
+                        <span>{featuredArticle.readingTime}</span>
+                      </div>
+                    </div>
+                  </Link>
                   
-                  {/* Overlay Metadata */}
-                  <div className="absolute bottom-6 left-6 right-6 text-white space-y-2">
-                    <span className="bg-brand-red text-white text-[9px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-sm">
-                      WEEKLY INTELLIGENCE REPORT
-                    </span>
-                    <h2 className="font-serif font-bold text-xl sm:text-2xl md:text-3xl leading-tight group-hover:text-neutral-200 transition-colors">
-                      {featuredArticle.title}
+                  <div className="p-6">
+                    <p className="text-xs sm:text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed font-sans">
+                      {featuredArticle.excerpt}
+                    </p>
+                    <Link
+                      href={`/${featuredArticle.category}/${featuredArticle.id}`}
+                      className="inline-flex items-center text-xs font-bold text-brand-red uppercase tracking-wider mt-4 hover:text-brand-red-dark hover:translate-x-1 transition-all cursor-pointer"
+                    >
+                      Read Full Analysis &rarr;
+                    </Link>
+                  </div>
+                </div>
+              )}
+
+              {gridArticles.length > 0 && (
+                <>
+                  <hr className="border-neutral-200 dark:border-neutral-800" />
+                  
+                  {/* Grid of Latest Articles */}
+                  <div>
+                    <h2 className="font-serif font-bold text-xl text-brand-dark dark:text-white mb-5 uppercase tracking-wider border-l-2 border-brand-red pl-3.5">
+                      Latest Market Analysis
                     </h2>
-                    <div className="flex items-center space-x-4 text-[10px] text-neutral-300 pt-1">
-                      <span>By <strong>{featuredArticle.author}</strong></span>
-                      <span>&bull;</span>
-                      <span>{featuredArticle.publishedAt}</span>
-                      <span>&bull;</span>
-                      <span>{featuredArticle.readingTime}</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                      {gridArticles.map((art) => (
+                        <ArticleCard key={art.id} article={art} layout="grid" />
+                      ))}
                     </div>
                   </div>
-                </Link>
-                
-                <div className="p-6">
-                  <p className="text-xs sm:text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed font-sans">
-                    {featuredArticle.excerpt}
-                  </p>
+                </>
+              )}
+
+              <hr className="border-neutral-200 dark:border-neutral-800" />
+
+              {/* Full-width Economic Calendar (Embedded in left panel) */}
+              <EconomicCalendarWidget />
+
+              {educationalArticles.length > 0 && (
+                <>
+                  <hr className="border-neutral-200 dark:border-neutral-800" />
+                  
+                  {/* Learn Forex Column */}
+                  <div>
+                    <h2 className="font-serif font-bold text-xl text-brand-dark dark:text-white mb-5 uppercase tracking-wider border-l-2 border-brand-red pl-3.5 flex justify-between items-center">
+                      <span>Learn Forex & Trading Systems</span>
+                      <Link href="/learn-forex" className="text-xs font-bold text-brand-red lowercase hover:underline normal-case tracking-normal">
+                        View Academy &rarr;
+                      </Link>
+                    </h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                      {educationalArticles.map((art) => (
+                        <ArticleCard key={art.id} article={art} layout="grid" aspectRatio="aspect-[4/3]" />
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+
+            </div>
+
+            {/* Right Column / Sidebar (4 Cols on large screens) */}
+            <aside className="lg:col-span-4 space-y-8">
+              
+              {/* Square Ad Banner Sponsor (300x250) */}
+              <AdBanner size="square" />
+
+              {dailyFeedArticles.length > 0 && (
+                /* Daily Technical Feed Quick List */
+                <div className="bg-neutral-50 dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-5 transition-colors">
+                  <h3 className="font-serif font-bold text-sm tracking-wider uppercase text-brand-dark dark:text-neutral-100 border-b border-neutral-200 dark:border-neutral-800 pb-3 mb-4 flex justify-between items-center">
+                    <span>Daily Technical Feed</span>
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping"></span>
+                  </h3>
+                  
+                  <div className="flex flex-col divide-y divide-neutral-100 dark:divide-neutral-850/55">
+                    {dailyFeedArticles.map((art) => (
+                      <div key={art.id} className="py-3.5 first:pt-0 last:pb-0 group">
+                        <span className="text-[9px] font-extrabold text-amber-500 uppercase tracking-widest block mb-0.5">
+                          {art.publishedAt}
+                        </span>
+                        <Link
+                          href={`/daily-feed/${art.id}`}
+                          className="font-serif font-bold text-xs sm:text-sm text-neutral-800 dark:text-neutral-200 group-hover:text-brand-red dark:group-hover:text-brand-red transition-colors cursor-pointer"
+                        >
+                          {art.title}
+                        </Link>
+                        <p className="text-[11px] text-neutral-500 line-clamp-2 mt-1 leading-normal">
+                          {art.excerpt}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
                   <Link
-                    href={`/${featuredArticle.category}/${featuredArticle.id}`}
-                    className="inline-flex items-center text-xs font-bold text-brand-red uppercase tracking-wider mt-4 hover:text-brand-red-dark hover:translate-x-1 transition-all cursor-pointer"
+                    href="/daily-feed"
+                    className="block text-center text-xs font-bold text-brand-red mt-5 hover:underline"
                   >
-                    Read Full Analysis &rarr;
+                    View Daily Feed Archive &rarr;
                   </Link>
                 </div>
-              </div>
-            )}
+              )}
 
-            {gridArticles.length > 0 && (
-              <>
-                <hr className="border-neutral-200 dark:border-neutral-800" />
-                
-                {/* Grid of Latest Articles */}
-                <div>
-                  <h2 className="font-serif font-bold text-xl text-brand-dark dark:text-white mb-5 uppercase tracking-wider border-l-2 border-brand-red pl-3.5">
-                    Latest Market Analysis
-                  </h2>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                    {gridArticles.map((art) => (
-                      <ArticleCard key={art.id} article={art} layout="grid" />
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-
-            <hr className="border-neutral-200 dark:border-neutral-800" />
-
-            {/* Full-width Economic Calendar (Embedded in left panel) */}
-            <EconomicCalendarWidget />
-
-            {educationalArticles.length > 0 && (
-              <>
-                <hr className="border-neutral-200 dark:border-neutral-800" />
-                
-                {/* Learn Forex Column */}
-                <div>
-                  <h2 className="font-serif font-bold text-xl text-brand-dark dark:text-white mb-5 uppercase tracking-wider border-l-2 border-brand-red pl-3.5 flex justify-between items-center">
-                    <span>Learn Forex & Trading Systems</span>
-                    <Link href="/learn-forex" className="text-xs font-bold text-brand-red lowercase hover:underline normal-case tracking-normal">
-                      View Academy &rarr;
-                    </Link>
-                  </h2>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                    {educationalArticles.map((art) => (
-                      <ArticleCard key={art.id} article={art} layout="grid" aspectRatio="aspect-[4/3]" />
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-
-          </div>
-
-          {/* Right Column / Sidebar (4 Cols on large screens) */}
-          <aside className="lg:col-span-4 space-y-8">
-            
-            {/* Square Ad Banner Sponsor (300x250) */}
-            <AdBanner size="square" />
-
-            {dailyFeedArticles.length > 0 && (
-              /* Daily Technical Feed Quick List */
-              <div className="bg-neutral-50 dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-5 transition-colors">
-                <h3 className="font-serif font-bold text-sm tracking-wider uppercase text-brand-dark dark:text-neutral-100 border-b border-neutral-200 dark:border-neutral-800 pb-3 mb-4 flex justify-between items-center">
-                  <span>Daily Technical Feed</span>
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping"></span>
+              {/* Sponsored Links / Recommendations Block */}
+              <div className="bg-neutral-50 dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-5 transition-colors text-xs space-y-4">
+                <h3 className="font-serif font-bold text-sm tracking-wider uppercase text-brand-dark dark:text-neutral-100 border-b border-neutral-200 dark:border-neutral-800 pb-3">
+                  Institutional Partners
                 </h3>
-                
-                <div className="flex flex-col divide-y divide-neutral-100 dark:divide-neutral-800/55">
-                  {dailyFeedArticles.map((art) => (
-                    <div key={art.id} className="py-3.5 first:pt-0 last:pb-0 group">
-                      <span className="text-[9px] font-extrabold text-amber-500 uppercase tracking-widest block mb-0.5">
-                        {art.publishedAt}
-                      </span>
-                      <Link
-                        href={`/daily-feed/${art.id}`}
-                        className="font-serif font-bold text-xs sm:text-sm text-neutral-800 dark:text-neutral-200 group-hover:text-brand-red dark:group-hover:text-brand-red transition-colors cursor-pointer"
-                      >
-                        {art.title}
-                      </Link>
-                      <p className="text-[11px] text-neutral-500 line-clamp-2 mt-1 leading-normal">
-                        {art.excerpt}
-                      </p>
+                <ul className="space-y-3">
+                  <li>
+                    <a href="#" className="hover:text-brand-red transition-colors flex justify-between items-center group font-medium">
+                      <span>Global Prime (STP Brokers)</span>
+                      <span className="text-[10px] text-neutral-400 group-hover:translate-x-0.5 transition-transform">&rarr;</span>
+                    </a>
+                  </li>
+                  <li>
+                    <a href="#" className="hover:text-brand-red transition-colors flex justify-between items-center group font-medium">
+                      <span>TradingView Charting Suite</span>
+                      <span className="text-[10px] text-neutral-400 group-hover:translate-x-0.5 transition-transform">&rarr;</span>
+                    </a>
+                  </li>
+                  <li>
+                    <a href="#" className="hover:text-brand-red transition-colors flex justify-between items-center group font-medium">
+                      <span>Beeks FX Low-Latency VPS</span>
+                      <span className="text-[10px] text-neutral-400 group-hover:translate-x-0.5 transition-transform">&rarr;</span>
+                    </a>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Inline Sponsor Strip */}
+              <AdBanner size="inline" />
+
+              {/* Trading Session status indicator widget */}
+              <div className="bg-neutral-50 dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-5 transition-colors">
+                <h3 className="font-serif font-bold text-sm tracking-wider uppercase text-brand-dark dark:text-neutral-100 border-b border-neutral-200 dark:border-neutral-800 pb-3 mb-4">
+                  Trading Session Status
+                </h3>
+                <div className="space-y-3">
+                  {[
+                    { name: "London Session", active: true, color: "text-emerald-500" },
+                    { name: "New York Session", active: true, color: "text-emerald-500" },
+                    { name: "Tokyo Session", active: false, color: "text-neutral-400" },
+                    { name: "Sydney Session", active: false, color: "text-neutral-400" },
+                  ].map((ses, idx) => (
+                    <div key={idx} className="flex justify-between items-center text-xs font-semibold">
+                      <span className="text-neutral-700 dark:text-neutral-300">{ses.name}</span>
+                      <div className="flex items-center space-x-1.5">
+                        <span className={`h-2.5 w-2.5 rounded-full ${ses.active ? "bg-emerald-500 animate-pulse" : "bg-neutral-400"}`}></span>
+                        <span className={`text-[10px] uppercase font-bold tracking-wider ${ses.color}`}>
+                          {ses.active ? "Active" : "Closed"}
+                        </span>
+                      </div>
                     </div>
                   ))}
                 </div>
-
-                <Link
-                  href="/daily-feed"
-                  className="block text-center text-xs font-bold text-brand-red mt-5 hover:underline"
-                >
-                  View Daily Feed Archive &rarr;
-                </Link>
               </div>
-            )}
 
-            {/* Sponsored Links / Recommendations Block */}
-            <div className="bg-neutral-50 dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-5 transition-colors text-xs space-y-4">
-              <h3 className="font-serif font-bold text-sm tracking-wider uppercase text-brand-dark dark:text-neutral-100 border-b border-neutral-200 dark:border-neutral-800 pb-3">
-                Institutional Partners
-              </h3>
-              <ul className="space-y-3">
-                <li>
-                  <a href="#" className="hover:text-brand-red transition-colors flex justify-between items-center group font-medium">
-                    <span>Global Prime (STP Brokers)</span>
-                    <span className="text-[10px] text-neutral-400 group-hover:translate-x-0.5 transition-transform">&rarr;</span>
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="hover:text-brand-red transition-colors flex justify-between items-center group font-medium">
-                    <span>TradingView Charting Suite</span>
-                    <span className="text-[10px] text-neutral-400 group-hover:translate-x-0.5 transition-transform">&rarr;</span>
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="hover:text-brand-red transition-colors flex justify-between items-center group font-medium">
-                    <span>Beeks FX Low-Latency VPS</span>
-                    <span className="text-[10px] text-neutral-400 group-hover:translate-x-0.5 transition-transform">&rarr;</span>
-                  </a>
-                </li>
-              </ul>
-            </div>
-
-            {/* Inline Sponsor Strip */}
-            <AdBanner size="inline" />
-
-            {/* Trading Session status indicator widget */}
-            <div className="bg-neutral-50 dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-5 transition-colors">
-              <h3 className="font-serif font-bold text-sm tracking-wider uppercase text-brand-dark dark:text-neutral-100 border-b border-neutral-200 dark:border-neutral-800 pb-3 mb-4">
-                Trading Session Status
-              </h3>
-              <div className="space-y-3">
-                {[
-                  { name: "London Session", active: true, color: "text-emerald-500" },
-                  { name: "New York Session", active: true, color: "text-emerald-500" },
-                  { name: "Tokyo Session", active: false, color: "text-neutral-400" },
-                  { name: "Sydney Session", active: false, color: "text-neutral-400" },
-                ].map((ses, idx) => (
-                  <div key={idx} className="flex justify-between items-center text-xs font-semibold">
-                    <span className="text-neutral-700 dark:text-neutral-300">{ses.name}</span>
-                    <div className="flex items-center space-x-1.5">
-                      <span className={`h-2.5 w-2.5 rounded-full ${ses.active ? "bg-emerald-500 animate-pulse" : "bg-neutral-400"}`}></span>
-                      <span className={`text-[10px] uppercase font-bold tracking-wider ${ses.color}`}>
-                        {ses.active ? "Active" : "Closed"}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-          </aside>
-        </div>
+            </aside>
+          </div>
+        )
       )}
 
       {/* 4. Bottom Full-Width Newsletter Signup Banner */}

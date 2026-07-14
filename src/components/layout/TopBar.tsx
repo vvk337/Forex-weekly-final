@@ -7,14 +7,34 @@ export default function TopBar() {
   const [isDarkMode, setIsDarkMode] = useState(false);
 
   useEffect(() => {
-    // Format: Monday, July 13, 2026
-    const options: Intl.DateTimeFormatOptions = {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
+    let offset = 0;
+
+    const syncTime = async () => {
+      try {
+        const res = await fetch("/api/time");
+        if (res.ok) {
+          const data = await res.json();
+          offset = new Date(data.datetime).getTime() - Date.now();
+        }
+      } catch (err) {
+        console.error("Failed to sync clock with server time", err);
+      }
     };
-    setCurrentDate(new Date().toLocaleDateString("en-US", options));
+
+    const updateClock = () => {
+      const serverTime = new Date(Date.now() + offset);
+      const options: Intl.DateTimeFormatOptions = {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true,
+      };
+      setCurrentDate(serverTime.toLocaleDateString("en-US", options));
+    };
 
     // Dark Mode initialization
     const savedTheme = localStorage.getItem("theme");
@@ -26,6 +46,14 @@ export default function TopBar() {
       document.documentElement.classList.remove("dark");
       setIsDarkMode(false);
     }
+
+    // Sync and start ticking
+    syncTime().then(() => {
+      updateClock();
+    });
+
+    const interval = setInterval(updateClock, 1000);
+    return () => clearInterval(interval);
   }, []);
 
   const toggleTheme = () => {
