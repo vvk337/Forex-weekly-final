@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Forex Weekly - Backend Inventory Documentation</title>
+  <style>
+    :root {
+      --primary-red: #E31E24;
+      --dark-gray: #1E1E1E;
+      --bg-white: #FFFFFF;
+      --border-color: #E2E8F0;
+      --text-gray: #4A5568;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+      color: var(--dark-gray);
+      background-color: var(--bg-white);
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 0 20px;
+    }
+
+    h1, h2, h3, h4 {
+      font-family: "Times New Roman", Times, Georgia, serif;
+      font-weight: 700;
+      color: var(--dark-gray);
+    }
+
+    h1 {
+      font-size: 2.25rem;
+      border-bottom: 2px solid var(--primary-red);
+      padding-bottom: 10px;
+      margin-bottom: 30px;
+    }
+
+    h2 {
+      font-size: 1.5rem;
+      margin-top: 40px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 5px;
+    }
+
+    h3 {
+      font-size: 1.15rem;
+      margin-top: 25px;
+      color: var(--primary-red);
+    }
+
+    ul {
+      padding-left: 20px;
+    }
+
+    li {
+      margin-bottom: 8px;
+    }
+
+    .alert-box {
+      background-color: rgba(227, 30, 36, 0.05);
+      border-left: 4px solid var(--primary-red);
+      padding: 15px;
+      margin: 20px 0;
+      border-radius: 4px;
+    }
+
+    .alert-box strong {
+      color: var(--primary-red);
+      text-transform: uppercase;
+      font-size: 0.85rem;
+      letter-spacing: 0.05em;
+    }
+
+    .alert-box p {
+      margin: 5px 0 0 0;
+      font-size: 0.9rem;
+      color: var(--text-gray);
+    }
+
+    code {
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+      background-color: #F7FAFC;
+      border: 1px solid var(--border-color);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.9em;
+    }
+
+    pre {
+      background-color: #F7FAFC;
+      border: 1px solid var(--border-color);
+      padding: 15px;
+      border-radius: 6px;
+      overflow-x: auto;
+    }
+
+    pre code {
+      background-color: transparent;
+      border: none;
+      padding: 0;
+    }
+
+    .meta-tag {
+      font-size: 0.8rem;
+      font-weight: bold;
+      color: #718096;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    @media print {
+      body {
+        margin: 20px;
+        max-width: 100%;
+      }
+      h2 {
+        page-break-before: always;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <span class="meta-tag">System Documentation</span>
+  <h1>Complete Backend Inventory - Forex Weekly CMS</h1>
+  <p>This document provides a comprehensive technical inventory of the current backend architecture, including database schemas, authentication systems, API endpoints, and admin dashboard pages.</p>
+
+  <div class="alert-box">
+    <strong>Documentation Guidelines</strong>
+    <p>This document is structured as an inventory only and details the current production specifications, dependencies, and local constraints of the codebase.</p>
+  </div>
+
+  <h2>1. Core Services &amp; Middleware</h2>
+
+  <h3>Database Layer</h3>
+  <ul>
+    <li><strong>Name:</strong> Prisma Client &amp; SQLite Database</li>
+    <li><strong>Purpose:</strong> Manages connections, queries, and data persistence for all content and settings.</li>
+    <li><strong>Current Functionality:</strong>
+      <ul>
+        <li>Standard Prisma setup using SQLite (<code>prisma/schema.prisma</code> mapping to <code>prisma/dev.db</code>).</li>
+        <li>Utilizes a singleton client wrapper (<code>src/lib/db.ts</code>) to avoid connection leaks during hot-reloads.</li>
+      </ul>
+    </li>
+    <li><strong>Dependencies:</strong> <code>@prisma/client</code>, <code>prisma</code> ORM.</li>
+    <li><strong>Existing Limitations:</strong> Built on SQLite (<code>file:./dev.db</code>), which does not support concurrently writing connections (can cause write-lock blocks under heavy loads) and is not suited for multi-server replication.</li>
+  </ul>
+
+  <h3>Authentication &amp; Route Security</h3>
+  <ul>
+    <li><strong>Name:</strong> Custom JWT Cookie Authentication &amp; Next.js Middleware</li>
+    <li><strong>Purpose:</strong> Protects private admin dashboard directories and modifications endpoints from unauthenticated clients.</li>
+    <li><strong>Current Functionality:</strong>
+      <ul>
+        <li>Middleware (<code>middleware.ts</code>) checks for the presence of the <code>admin_token</code> cookie.</li>
+        <li>Verifies cookie authenticity using JWT checks. Redirects unauthenticated requests trying to access <code>/admin/dashboard/*</code> to <code>/admin/login</code>.</li>
+      </ul>
+    </li>
+    <li><strong>Dependencies:</strong> <code>jose</code> (JWT verification), <code>next/server</code> middleware.</li>
+    <li><strong>Existing Limitations:</strong> Standard JWT payload parsing is in-memory on each edge request; does not support token revocation lists (sessions cannot be force-invalidated until their JWT expiry date passes unless a database check is added).</li>
+  </ul>
+
+  <h2>2. API Router Endpoints (<code>src/app/api/*</code>)</h2>
+
+  <h3>Authentication Endpoints</h3>
+  <ul>
+    <li><strong>Name:</strong> <code>/api/auth/login</code> and <code>/api/auth/logout</code></li>
+    <li><strong>Purpose:</strong> Processes admin dashboard login credentials and logs out sessions.</li>
+    <li><strong>Current Functionality:</strong>
+      <ul>
+        <li><code>POST (login)</code>: Compares inputs against <code>Admin</code> database records using <code>bcryptjs</code>. If correct, creates a secure, HTTP-only <code>admin_token</code> session cookie.</li>
+        <li><code>POST (logout)</code>: Overwrites the client's <code>admin_token</code> cookie value with an empty string and sets it to expire immediately.</li>
+      </ul>
+    </li>
+    <li><strong>Dependencies:</strong> <code>bcryptjs</code> (password comparisons), <code>jose</code> (JWT signatures), <code>prisma</code>.</li>
+    <li><strong>Existing Limitations:</strong> Single admin credentials design. No rate limiting or brute-force lockouts implemented on the login route.</li>
+  </ul>
+
+  <h3>Articles Management API</h3>
+  <ul>
+    <li><strong>Name:</strong> <code>/api/articles</code> and <code>/api/articles/[id]</code></li>
+    <li><strong>Purpose:</strong> Coordinates article data queries, publications creation, updates, and deletions.</li>
+    <li><strong>Current Functionality:</strong>
+      <ul>
+        <li><code>GET</code>: Retrieves all published articles sorted by date. If the database count is 0, it dynamically seeds initial mock articles.</li>
+        <li><code>POST</code>: Saves a new article publication in the database (admin auth required).</li>
+        <li><code>PUT</code>: Updates an existing article's title, excerpt, content, category, author, and imageUrl (admin auth required).</li>
+        <li><code>DELETE</code>: Deletes an article by ID from the database (admin auth required).</li>
+      </ul>
+    </li>
+    <li><strong>Dependencies:</strong> <code>prisma</code>, custom JWT checker.</li>
+    <li><strong>Existing Limitations:</strong> Lacks content pagination on <code>GET</code> requests (retrieves all records in one go, which can slow down as the database grows).</li>
+  </ul>
+
+  <h3>Sponsored Placements API</h3>
+  <ul>
+    <li><strong>Name:</strong> <code>/api/sponsors</code></li>
+    <li><strong>Purpose:</strong> Manages sponsored placement properties for the website banners.</li>
+    <li><strong>Current Functionality:</strong>
+      <ul>
+        <li><code>GET</code>: Fetches current banner records (leaderboard, square, inline). Seeds default text configurations if database records are empty.</li>
+        <li><code>PUT</code>: Updates details of a banner (headline title, description, linkUrl, CTA buttonText, logo imageUrl, and bgImageUrl) (admin auth required).</li>
+      </ul>
+    </li>
+    <li><strong>Dependencies:</strong> <code>prisma</code>, custom JWT checker.</li>
+    <li><strong>Existing Limitations:</strong> Placements are hardcoded to three slots (<code>leaderboard</code>, <code>square</code>, <code>inline</code>); new slots cannot be created dynamically from the backend dashboard.</li>
+  </ul>
+
+  <h3>Breaking News Ticker API</h3>
+  <ul>
+    <li><strong>Name:</strong> <code>/api/breaking-news</code></li>
+    <li><strong>Purpose:</strong> Scrapes Yahoo Finance RSS feeds or returns custom manually locked alerts.</li>
+    <li><strong>Current Functionality:</strong>
+      <ul>
+        <li><code>GET</code>: Returns the active scrolling headlines list:
+          <ul>
+            <li>In <strong>Automatic Mode</strong>: Fetches the Yahoo Finance RSS feed (<code>https://finance.yahoo.com/news/rss</code>), parses item headlines via server-side Regex extraction, and implements a 5-minute memory cache.</li>
+            <li>In <strong>Manual Mode</strong>: Parses and returns active custom manual headlines (excluding any items whose dynamic timer has expired).</li>
+          </ul>
+        </li>
+        <li><code>PUT</code>: Saves chosen ticker mode ("auto" / "manual") and serializes the list of manual override text entries and their expiration relative timestamps as a JSON array (admin auth required).</li>
+      </ul>
+    </li>
+    <li><strong>Dependencies:</strong> <code>prisma</code>, server-side native HTTP requests, custom JWT checker.</li>
+    <li><strong>Existing Limitations:</strong> Memory-based caching is wiped if the Node server restarts or recycles.</li>
+  </ul>
+
+  <h3>Contact Inbox API</h3>
+  <ul>
+    <li><strong>Name:</strong> <code>/api/contact</code></li>
+    <li><strong>Purpose:</strong> Receives client contact messages and allows admins to track them.</li>
+    <li><strong>Current Functionality:</strong>
+      <ul>
+        <li><code>POST</code>: Validates inputs and saves incoming name, email, subject, and message in the <code>ContactMessage</code> table.</li>
+        <li><code>GET</code>: Retrieves all submitted contact entries, ordered by date (admin auth required).</li>
+        <li><code>DELETE</code>: Deletes a support message by its ID from the inbox (admin auth required).</li>
+      </ul>
+    </li>
+    <li><strong>Dependencies:</strong> <code>prisma</code>, custom JWT checker.</li>
+    <li><strong>Existing Limitations:</strong> No automated email notifications are dispatched to staff or clients when a query is submitted; messages are only reviewable via dashboard query logs.</li>
+  </ul>
+
+  <h3>Media Upload API</h3>
+  <ul>
+    <li><strong>Name:</strong> <code>/api/upload</code></li>
+    <li><strong>Purpose:</strong> Writes uploaded file binaries directly to local disk storage.</li>
+    <li><strong>Current Functionality:</strong>
+      <ul>
+        <li><code>POST</code>: Receives multipart form data payloads, generates a unique prefix timestamp, and writes the image file to the static asset directory (<code>public/uploads/</code>).</li>
+      </ul>
+    </li>
+    <li><strong>Dependencies:</strong> Node.js <code>fs</code> module, custom JWT checker.</li>
+    <li><strong>Existing Limitations:</strong> Writes files locally to the server's hard drive. In serverless or containerized environments (like AWS Lambda or Vercel), local files are ephemeral and get deleted when instances recycle. (Requires S3 or other cloud asset stores for permanent persistence).</li>
+  </ul>
+
+  <h3>Server Time Synchronizer</h3>
+  <ul>
+    <li><strong>Name:</strong> <code>/api/time</code></li>
+    <li><strong>Purpose:</strong> Provides UTC server time to coordinate client clocks.</li>
+    <li><strong>Current Functionality:</strong>
+      <ul>
+        <li><code>GET</code>: Returns <code>{ datetime: string }</code> representing the current UTC time.</li>
+      </ul>
+    </li>
+    <li><strong>Dependencies:</strong> Standard JavaScript <code>Date</code> API.</li>
+    <li><strong>Existing Limitations:</strong> None (simple server utility).</li>
+  </ul>
+
+  <h2>3. Admin Dashboard Frontend Pages (<code>src/app/admin/*</code>)</h2>
+
+  <h3>Admin Login Screen</h3>
+  <ul>
+    <li><strong>Name:</strong> <code>/admin/login</code></li>
+    <li><strong>Purpose:</strong> Interface for logging into the dashboard.</li>
+    <li><strong>Current Functionality:</strong> Collects Username and Password inputs, handles fetch validation requests to <code>/api/auth/login</code>, and redirects to <code>/admin/dashboard</code> upon success.</li>
+    <li><strong>Dependencies:</strong> Client-side Next.js hooks.</li>
+  </ul>
+
+  <h3>Dashboard Console</h3>
+  <ul>
+    <li><strong>Name:</strong> <code>/admin/dashboard</code></li>
+    <li><strong>Purpose:</strong> Central control panel for all CMS operations.</li>
+    <li><strong>Current Functionality:</strong>
+      <ul>
+        <li>Displays a tabbed interface containing:
+          <ol>
+            <li><strong>Publications:</strong> Grid list showing all articles with delete options.</li>
+            <li><strong>Sponsored Placements:</strong> Lists banner spots with edit links.</li>
+            <li><strong>Breaking News:</strong> Radio triggers to select feed mode. Toggles a dynamic manual list editor supporting addition/deletion of up to 11 headline boxes with individual expiration selectors (10 min to 1 day).</li>
+            <li><strong>Inbox Messages:</strong> Table displaying user inquiry logs and emails, with message deletion tools.</li>
+          </ol>
+        </li>
+      </ul>
+    </li>
+    <li><strong>Dependencies:</strong> API connectors.</li>
+    <li><strong>Existing Limitations:</strong> Performs bulk loading of data on tab changes without pagination.</li>
+  </ul>
+
+  <h3>Article Creation Editor</h3>
+  <ul>
+    <li><strong>Name:</strong> <code>/admin/dashboard/create</code></li>
+    <li><strong>Purpose:</strong> Form to write and publish news articles.</li>
+    <li><strong>Current Functionality:</strong>
+      <ul>
+        <li>Collects title, category selection, excerpt summary, and body text.</li>
+        <li>Hosts a local image file selector connected to <code>/api/upload</code>, displaying real-time upload progress indicators.</li>
+      </ul>
+    </li>
+    <li><strong>Dependencies:</strong> Upload connectors.</li>
+    <li><strong>Existing Limitations:</strong> Plain text/textarea body editor. No Rich Text Editor (WYSIWYG/Markdown) interface for text styling.</li>
+  </ul>
+
+  <h3>Sponsored Placements Editor</h3>
+  <ul>
+    <li><strong>Name:</strong> <code>/admin/dashboard/sponsors/[id]</code></li>
+    <li><strong>Purpose:</strong> Editing form for ad spots.</li>
+    <li><strong>Current Functionality:</strong>
+      <ul>
+        <li>Modifies Headline, Target Link, and CTA texts.</li>
+        <li>Features dual file upload input elements for both the Sponsor Logo and the Banner Background Image.</li>
+        <li>Displays ideal pixel sizing hints based on the target slot configuration.</li>
+      </ul>
+    </li>
+    <li><strong>Dependencies:</strong> API upload connectors.</li>
+    <li><strong>Existing Limitations:</strong> Background settings apply globally without user device scaling triggers.</li>
+  </ul>
+
+</body>
+</html>

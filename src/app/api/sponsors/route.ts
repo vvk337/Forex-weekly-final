@@ -1,17 +1,11 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
-import { verifyJWT } from "@/lib/auth";
+import { validatePermissions } from "@/lib/auth-helpers";
 
 // Helper to check if request is authenticated as admin
 async function isAuthenticated(request: Request) {
-  const token = request.headers.get("cookie")
-    ?.split(";")
-    .find((c) => c.trim().startsWith("admin_token="))
-    ?.split("=")[1];
-
-  if (!token) return false;
-  const decoded = await verifyJWT(token);
-  return !!decoded;
+  const { authorized } = await validatePermissions(request, "sponsors:write");
+  return authorized;
 }
 
 // Auto-seed default sponsor configurations if empty

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
-import { verifyJWT } from "@/lib/auth";
+import { validatePermissions } from "@/lib/auth-helpers";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -8,14 +8,8 @@ interface RouteParams {
 
 // Helper to authenticate requests
 async function isAuthenticated(request: Request) {
-  const token = request.headers.get("cookie")
-    ?.split(";")
-    .find((c) => c.trim().startsWith("admin_token="))
-    ?.split("=")[1];
-
-  if (!token) return false;
-  const decoded = await verifyJWT(token);
-  return !!decoded;
+  const { authorized } = await validatePermissions(request, "articles:write");
+  return authorized;
 }
 
 // GET single article

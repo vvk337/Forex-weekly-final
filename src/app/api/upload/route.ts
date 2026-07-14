@@ -2,17 +2,12 @@ import { NextResponse } from "next/server";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import { existsSync } from "fs";
-import { verifyJWT } from "@/lib/auth";
+import { validatePermissions } from "@/lib/auth-helpers";
 
 export async function POST(request: Request) {
   try {
-    // Validate admin credentials
-    const token = request.headers.get("cookie")
-      ?.split(";")
-      .find((c) => c.trim().startsWith("admin_token="))
-      ?.split("=")[1];
-
-    if (!token || !(await verifyJWT(token))) {
+    const { authorized } = await validatePermissions(request, "assets:write");
+    if (!authorized) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

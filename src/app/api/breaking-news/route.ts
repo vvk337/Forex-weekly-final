@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
-import { verifyJWT } from "@/lib/auth";
+import { validatePermissions } from "@/lib/auth-helpers";
 
 // Cache variables for live RSS feed
 let cachedHeadlines: string[] = [];
@@ -9,14 +9,8 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache
 
 // Helper to check if request is authenticated as admin
 async function isAuthenticated(request: Request) {
-  const token = request.headers.get("cookie")
-    ?.split(";")
-    .find((c) => c.trim().startsWith("admin_token="))
-    ?.split("=")[1];
-
-  if (!token) return false;
-  const decoded = await verifyJWT(token);
-  return !!decoded;
+  const { authorized } = await validatePermissions(request, "ticker:write");
+  return authorized;
 }
 
 // Simple regex XML parser for RSS headlines

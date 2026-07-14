@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
-import { verifyJWT } from "@/lib/auth";
+import { validatePermissions } from "@/lib/auth-helpers";
 import { mockArticles } from "@/data/mockData";
 
 // Seed articles dynamically if DB is empty
@@ -59,13 +59,8 @@ export async function GET(request: Request) {
 // POST new article (Admin Only)
 export async function POST(request: Request) {
   try {
-    // Validate admin token
-    const token = request.headers.get("cookie")
-      ?.split(";")
-      .find((c) => c.trim().startsWith("admin_token="))
-      ?.split("=")[1];
-
-    if (!token || !(await verifyJWT(token))) {
+    const { authorized } = await validatePermissions(request, "articles:write");
+    if (!authorized) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
