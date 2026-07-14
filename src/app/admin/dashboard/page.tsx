@@ -37,13 +37,21 @@ export default function AdminDashboardPage() {
   const [articles, setArticles] = useState<DbArticle[]>([]);
   const [sponsors, setSponsors] = useState<DbSponsor[]>([]);
   const [messages, setMessages] = useState<DbMessage[]>([]);
-  const [activeTab, setActiveTab] = useState<"articles" | "sponsors" | "inbox">("articles");
+  
+  // Ticker states
+  const [tickerMode, setTickerMode] = useState<"auto" | "manual">("auto");
+  const [tickerText, setTickerText] = useState("");
+  const [savingTicker, setSavingTicker] = useState(false);
+  const [tickerMessage, setTickerMessage] = useState("");
+
+  const [activeTab, setActiveTab] = useState<"articles" | "sponsors" | "inbox" | "ticker">("articles");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const fetchData = async () => {
     setLoading(true);
     setError("");
+    setTickerMessage("");
     try {
       if (activeTab === "articles") {
         const res = await fetch("/api/articles");
@@ -55,11 +63,17 @@ export default function AdminDashboardPage() {
         if (!res.ok) throw new Error("Failed to load sponsored sections");
         const data = await res.json();
         setSponsors(data);
-      } else {
+      } else if (activeTab === "inbox") {
         const res = await fetch("/api/contact");
         if (!res.ok) throw new Error("Failed to load inbox messages");
         const data = await res.json();
         setMessages(data);
+      } else if (activeTab === "ticker") {
+        const res = await fetch("/api/breaking-news");
+        if (!res.ok) throw new Error("Failed to load ticker settings");
+        const data = await res.json();
+        setTickerMode(data.mode);
+        setTickerText(data.manualText || "");
       }
     } catch (err: any) {
       setError(err.message || "Failed to load database content");
@@ -107,6 +121,32 @@ export default function AdminDashboardPage() {
       setMessages(messages.filter((msg) => msg.id !== id));
     } catch (err: any) {
       alert(err.message || "Delete request failed");
+    }
+  };
+
+  const handleSaveTicker = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingTicker(true);
+    setTickerMessage("");
+    setError("");
+
+    try {
+      const res = await fetch("/api/breaking-news", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: tickerMode, manualText: tickerText }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Save failed");
+      }
+
+      setTickerMessage("News ticker configuration saved successfully!");
+    } catch (err: any) {
+      setError(err.message || "Failed to update news ticker configuration");
+    } finally {
+      setSavingTicker(false);
     }
   };
 
@@ -194,6 +234,16 @@ export default function AdminDashboardPage() {
           Sponsored Placements
         </button>
         <button
+          onClick={() => setActiveTab("ticker")}
+          className={`py-3 px-6 text-xs uppercase font-bold tracking-wider border-b-2 transition-all cursor-pointer ${
+            activeTab === "ticker"
+              ? "border-brand-red text-brand-red font-extrabold"
+              : "border-transparent text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
+          }`}
+        >
+          Breaking News
+        </button>
+        <button
           onClick={() => setActiveTab("inbox")}
           className={`py-3 px-6 text-xs uppercase font-bold tracking-wider border-b-2 transition-all cursor-pointer ${
             activeTab === "inbox"
@@ -208,6 +258,12 @@ export default function AdminDashboardPage() {
       {error && (
         <div className="bg-red-500/10 border border-red-500/30 text-red-500 p-4 rounded text-xs font-bold">
           {error}
+        </div>
+      )}
+
+      {tickerMessage && (
+        <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 p-4 rounded text-xs font-bold">
+          {tickerMessage}
         </div>
       )}
 
@@ -315,7 +371,7 @@ export default function AdminDashboardPage() {
                             alt="Logo"
                             className="h-6 w-12 object-contain bg-white border border-neutral-200 p-0.5 rounded"
                           />
-                          <span className="text-[10px] text-emerald-500 font-semibold">Active</span>
+                           <span className="text-[10px] text-emerald-500 font-semibold">Active</span>
                         </div>
                       ) : (
                         <span className="text-[10px] text-neutral-400">Text Only</span>
@@ -335,6 +391,98 @@ export default function AdminDashboardPage() {
             </table>
           </div>
         </div>
+      ) : activeTab === "ticker" ? (
+        /* NEWS TICKER CONFIGURATION TAB */
+        <form onSubmit={handleSaveTicker} className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-6 shadow-sm max-w-xl space-y-6">
+          <div>
+            <h3 className="font-serif font-bold text-base text-brand-dark dark:text-white mb-1.5">
+              Breaking News Ticker Settings
+            </h3>
+            <p className="text-xs text-neutral-400 leading-normal">
+              Choose between streaming real-time financial headlines automatically for free, or locking your own custom breaking alerts on the screen.
+            </p>
+          </div>
+
+          <div className="space-y-3.5">
+            <label className="text-[10px] font-extrabold uppercase tracking-widest text-brand-red block">
+              Ticker Feed Mode
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <label className={`flex flex-col p-4 border rounded cursor-pointer transition-all duration-200 ${
+                tickerMode === "auto"
+                  ? "border-brand-red bg-brand-red/[0.02]"
+                  : "border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/10 hover:border-neutral-350"
+              }`}>
+                <div className="flex items-center space-x-2.5">
+                  <input
+                    type="radio"
+                    name="tickerMode"
+                    value="auto"
+                    checked={tickerMode === "auto"}
+                    onChange={() => setTickerMode("auto")}
+                    className="accent-brand-red cursor-pointer"
+                  />
+                  <span className="text-xs font-bold text-neutral-850 dark:text-neutral-100">
+                    Automatic Mode (Free Feed)
+                  </span>
+                </div>
+                <span className="text-[10.5px] text-neutral-450 mt-2 leading-relaxed">
+                  Fetches live financial news headlines from the Yahoo Finance RSS feed. Fully automated, updating in real-time.
+                </span>
+              </label>
+
+              <label className={`flex flex-col p-4 border rounded cursor-pointer transition-all duration-200 ${
+                tickerMode === "manual"
+                  ? "border-brand-red bg-brand-red/[0.02]"
+                  : "border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/10 hover:border-neutral-350"
+              }`}>
+                <div className="flex items-center space-x-2.5">
+                  <input
+                    type="radio"
+                    name="tickerMode"
+                    value="manual"
+                    checked={tickerMode === "manual"}
+                    onChange={() => setTickerMode("manual")}
+                    className="accent-brand-red cursor-pointer"
+                  />
+                  <span className="text-xs font-bold text-neutral-850 dark:text-neutral-100">
+                    Manual Override Mode
+                  </span>
+                </div>
+                <span className="text-[10.5px] text-neutral-450 mt-2 leading-relaxed">
+                  Lock your own custom breaking announcements. Useful for major market rate cuts, announcements, or custom updates.
+                </span>
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 block mb-1.5">
+              Custom Override Headlines
+            </label>
+            <textarea
+              rows={4}
+              placeholder="e.g., URGENT: Fed raises benchmark rates by 25bps | NASDAQ trading volume spikes to monthly record"
+              value={tickerText}
+              onChange={(e) => setTickerText(e.target.value)}
+              disabled={tickerMode === "auto"}
+              className="w-full bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded px-4 py-2.5 text-xs text-brand-dark dark:text-white focus:outline-none focus:border-brand-red transition-colors disabled:opacity-40 resize-none leading-relaxed"
+            />
+            <span className="text-[10px] text-neutral-400 dark:text-neutral-500 block mt-1.5 leading-normal">
+              💡 <strong>Pro Tip:</strong> Separate multiple news alerts with a vertical bar <code className="bg-neutral-100 dark:bg-neutral-800 px-1 py-0.5 rounded text-[11px] font-mono text-brand-red">|</code> to make them scroll continuously.
+            </span>
+          </div>
+
+          <div className="flex justify-end pt-4 border-t border-neutral-100 dark:border-neutral-800">
+            <button
+              type="submit"
+              disabled={savingTicker}
+              className="bg-brand-red hover:bg-brand-red-dark text-white text-xs font-bold uppercase tracking-wider px-6 py-2.5 rounded-sm transition-colors cursor-pointer disabled:opacity-50"
+            >
+              {savingTicker ? "Saving Settings..." : "Save Ticker Settings"}
+            </button>
+          </div>
+        </form>
       ) : (
         /* INBOX TAB */
         messages.length === 0 ? (

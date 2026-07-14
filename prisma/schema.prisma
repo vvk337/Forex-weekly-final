@@ -49,3 +49,10 @@ model ContactMessage {
   message   String
   createdAt DateTime @default(now())
 }
+
+model TickerConfig {
+  id         String   @id @default("ticker")
+  mode       String   @default("auto")      // "auto" (RSS live feed) or "manual" (admin override)
+  manualText String   @default("")          // Custom text written by admin (e.g., "Alert 1 | Alert 2")
+  updatedAt  DateTime @updatedAt
+}
