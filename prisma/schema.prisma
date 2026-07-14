@@ -36,7 +36,8 @@ model Sponsor {
   description String
   linkUrl     String
   buttonText  String
-  imageUrl    String   @default("")
+  imageUrl    String   @default("") // Logo image
+  bgImageUrl  String   @default("") // Background image
   updatedAt   DateTime @updatedAt
 }
 

@@ -11,6 +11,7 @@ interface SponsorData {
   linkUrl: string;
   buttonText: string;
   imageUrl: string;
+  bgImageUrl: string;
 }
 
 export default function EditSponsorPage() {
@@ -25,11 +26,14 @@ export default function EditSponsorPage() {
     linkUrl: "",
     buttonText: "",
     imageUrl: "",
+    bgImageUrl: "",
   });
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingBg, setUploadingBg] = useState(false);
 
   useEffect(() => {
     // Fetch all and find matching
@@ -42,7 +46,10 @@ export default function EditSponsorPage() {
         if (Array.isArray(data)) {
           const matched = data.find((s) => s.id === sponsorId);
           if (matched) {
-            setFormData(matched);
+            setFormData({
+              ...matched,
+              bgImageUrl: matched.bgImageUrl || "",
+            });
           } else {
             setError("Sponsor placement not found.");
           }
@@ -51,6 +58,37 @@ export default function EditSponsorPage() {
       .catch((err: any) => setError(err.message || "Failed to load sponsor configuration"))
       .finally(() => setLoading(false));
   }, [sponsorId]);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: "imageUrl" | "bgImageUrl") => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (field === "imageUrl") setUploadingLogo(true);
+    else setUploadingBg(true);
+    setError("");
+
+    const body = new FormData();
+    body.append("file", file);
+
+    try {
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body,
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Upload failed");
+      }
+
+      setFormData((prev) => ({ ...prev, [field]: data.url }));
+    } catch (err: any) {
+      setError(err.message || "Failed to upload image file. Please verify auth token.");
+    } finally {
+      if (field === "imageUrl") setUploadingLogo(false);
+      else setUploadingBg(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,6 +113,33 @@ export default function EditSponsorPage() {
       setError(err.message || "An error occurred during save request");
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Determine resolution guidelines based on placement spot ID
+  const getLogoSizeHint = () => {
+    switch (sponsorId) {
+      case "leaderboard":
+        return "Ideal: 150x50 pixels (transparent PNG/SVG recommended)";
+      case "square":
+        return "Ideal: 180x60 pixels (transparent PNG/SVG recommended)";
+      case "inline":
+        return "Ideal: 150x50 pixels (transparent PNG/SVG recommended)";
+      default:
+        return "Transparent PNG or SVG recommended";
+    }
+  };
+
+  const getBgSizeHint = () => {
+    switch (sponsorId) {
+      case "leaderboard":
+        return "Ideal: 970x90 or 1200x120 pixels";
+      case "square":
+        return "Ideal: 300x250 pixels";
+      case "inline":
+        return "Ideal: 970x90 pixels";
+      default:
+        return "High-resolution JPG or WebP recommended";
     }
   };
 
@@ -120,7 +185,7 @@ export default function EditSponsorPage() {
             type="text"
             disabled
             value={formData.id}
-            className="w-full bg-neutral-100 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded px-4 py-2 text-xs text-neutral-500 focus:outline-none font-mono uppercase"
+            className="w-full bg-neutral-100 dark:bg-neutral-900/50 border border-neutral-200 dark:border-neutral-800 rounded px-4 py-2 text-xs text-neutral-500 focus:outline-none font-mono uppercase"
           />
         </div>
 
@@ -182,19 +247,77 @@ export default function EditSponsorPage() {
           </div>
         </div>
 
-        <div>
-          <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 block mb-1.5">
-            Sponsor Image Logo URL (Optional)
-          </label>
-          <input
-            type="text"
-            placeholder="e.g. /images/sponsor-logo.png"
-            value={formData.imageUrl}
-            onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
-            className="w-full bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded px-4 py-2 text-xs text-brand-dark dark:text-white focus:outline-none focus:border-brand-red transition-colors font-mono text-[11px]"
-          />
-          <span className="text-[9px] text-neutral-400 dark:text-neutral-500 block mt-1.5">
-            Provide a local path or external link to the image/logo. Leave empty for text-only layouts.
+        {/* 1. Sponsor Logo upload */}
+        <div className="border-t border-neutral-100 dark:border-neutral-800/80 pt-4 space-y-3">
+          <h4 className="text-[10px] font-extrabold uppercase tracking-widest text-brand-red mb-1">Brand Assets & Logos</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 block mb-1.5">
+                Sponsor Logo URL (Optional)
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. /uploads/logo.png"
+                value={formData.imageUrl}
+                onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
+                className="w-full bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded px-3 py-2 text-[11px] text-brand-dark dark:text-white focus:outline-none focus:border-brand-red transition-colors font-mono"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 block mb-1.5">
+                Upload Logo File
+              </label>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="file"
+                  accept="image/png, image/jpeg, image/jpg, image/webp, image/svg+xml, image/heic, image/heif"
+                  onChange={(e) => handleFileUpload(e, "imageUrl")}
+                  disabled={uploadingLogo}
+                  className="w-full text-[11px] text-neutral-500 file:mr-3 file:py-1.5 file:px-2.5 file:rounded file:border-0 file:text-[10px] file:font-bold file:bg-neutral-100 dark:file:bg-neutral-800 file:text-neutral-700 dark:file:text-neutral-300 hover:file:bg-neutral-200 dark:hover:file:bg-neutral-750 transition-colors cursor-pointer"
+                />
+                {uploadingLogo && <span className="text-[10px] font-bold text-brand-red animate-pulse shrink-0">Uploading...</span>}
+              </div>
+            </div>
+          </div>
+          <span className="text-[9px] text-neutral-400 dark:text-neutral-500 block leading-relaxed">
+            {getLogoSizeHint()} &bull; Supports PNG, JPG, WebP, SVG, HEIC.
+          </span>
+        </div>
+
+        {/* 2. Sponsor Background upload */}
+        <div className="border-t border-neutral-100 dark:border-neutral-800/80 pt-4 space-y-3">
+          <h4 className="text-[10px] font-extrabold uppercase tracking-widest text-brand-red mb-1">Banner Background</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 block mb-1.5">
+                Background Image URL (Optional)
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. /uploads/banner-bg.jpg"
+                value={formData.bgImageUrl}
+                onChange={(e) => setFormData({ ...formData, bgImageUrl: e.target.value })}
+                className="w-full bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded px-3 py-2 text-[11px] text-brand-dark dark:text-white focus:outline-none focus:border-brand-red transition-colors font-mono"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 block mb-1.5">
+                Upload Background File
+              </label>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="file"
+                  accept="image/png, image/jpeg, image/jpg, image/webp, image/svg+xml, image/heic, image/heif"
+                  onChange={(e) => handleFileUpload(e, "bgImageUrl")}
+                  disabled={uploadingBg}
+                  className="w-full text-[11px] text-neutral-500 file:mr-3 file:py-1.5 file:px-2.5 file:rounded file:border-0 file:text-[10px] file:font-bold file:bg-neutral-100 dark:file:bg-neutral-800 file:text-neutral-700 dark:file:text-neutral-300 hover:file:bg-neutral-200 dark:hover:file:bg-neutral-750 transition-colors cursor-pointer"
+                />
+                {uploadingBg && <span className="text-[10px] font-bold text-brand-red animate-pulse shrink-0">Uploading...</span>}
+              </div>
+            </div>
+          </div>
+          <span className="text-[9px] text-neutral-400 dark:text-neutral-500 block leading-relaxed">
+            {getBgSizeHint()} &bull; Supports PNG, JPG, WebP, SVG, HEIC.
           </span>
         </div>
 

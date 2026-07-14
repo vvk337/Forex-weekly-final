@@ -27,6 +27,7 @@ async function ensureSponsorsSeeded() {
           linkUrl: "#",
           buttonText: "Start Trading",
           imageUrl: "",
+          bgImageUrl: "",
         },
         {
           id: "square",
@@ -35,6 +36,7 @@ async function ensureSponsorsSeeded() {
           linkUrl: "#",
           buttonText: "Open Live Account",
           imageUrl: "",
+          bgImageUrl: "",
         },
         {
           id: "inline",
@@ -43,6 +45,7 @@ async function ensureSponsorsSeeded() {
           linkUrl: "#",
           buttonText: "Free Guide",
           imageUrl: "",
+          bgImageUrl: "",
         },
       ],
     });
@@ -69,7 +72,7 @@ export async function PUT(request: Request) {
     }
 
     const body = await request.json();
-    const { id, title, description, linkUrl, buttonText, imageUrl } = body;
+    const { id, title, description, linkUrl, buttonText, imageUrl, bgImageUrl } = body;
 
     if (!id || !title || !description || !linkUrl || !buttonText) {
       return NextResponse.json(
@@ -91,6 +94,7 @@ export async function PUT(request: Request) {
         linkUrl,
         buttonText,
         imageUrl: imageUrl !== undefined ? imageUrl : existing.imageUrl,
+        bgImageUrl: bgImageUrl !== undefined ? bgImageUrl : existing.bgImageUrl,
       },
     });
 
