@@ -70,10 +70,17 @@ export default function ArticleCard({ article, layout = "grid", aspectRatio = "a
     return (
       <div className="flex flex-col sm:flex-row gap-5 py-6 border-b border-neutral-100 dark:border-neutral-900 group">
         <Link href={linkHref} className={`sm:w-1/3 shrink-0 rounded overflow-hidden relative bg-neutral-100 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 ${aspectRatio} group-hover:shadow-md transition-all duration-300 cursor-pointer`}>
-          <div className="absolute inset-0 bg-neutral-200 dark:bg-neutral-800 flex items-center justify-center">
-            {/* Visual representation instead of empty page */}
-            <span className="text-2xl font-bold font-serif opacity-30 select-none text-neutral-600">FW</span>
-          </div>
+          {article.imageUrl ? (
+            <img
+              src={article.imageUrl}
+              alt={article.title}
+              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+            />
+          ) : (
+            <div className="absolute inset-0 bg-neutral-200 dark:bg-neutral-800 flex items-center justify-center">
+              <span className="text-2xl font-bold font-serif opacity-30 select-none text-neutral-600">FW</span>
+            </div>
+          )}
           <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
         </Link>
         
@@ -87,7 +94,7 @@ export default function ArticleCard({ article, layout = "grid", aspectRatio = "a
             </div>
             
             <Link href={linkHref} className="group-hover:text-brand-red transition-colors cursor-pointer">
-              <h3 className="font-serif font-bold text-lg md:text-xl leading-tight text-brand-dark dark:text-neutral-500 group-hover:text-brand-red dark:group-hover:text-brand-red transition-colors">
+              <h3 className="font-serif font-bold text-lg md:text-xl leading-tight text-brand-dark dark:text-neutral-100 group-hover:text-brand-red dark:group-hover:text-brand-red transition-colors">
                 {article.title}
               </h3>
             </Link>
@@ -110,9 +117,17 @@ export default function ArticleCard({ article, layout = "grid", aspectRatio = "a
   return (
     <div className="flex flex-col h-full bg-white dark:bg-brand-dark border border-neutral-200 dark:border-neutral-800 rounded overflow-hidden group hover:border-neutral-300 dark:hover:border-neutral-700 transition-all duration-300">
       <Link href={linkHref} className={`relative block bg-neutral-100 dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-800 overflow-hidden ${aspectRatio} cursor-pointer`}>
-        <div className="absolute inset-0 bg-neutral-200 dark:bg-neutral-800 flex items-center justify-center">
-          <span className="text-3xl font-bold font-serif opacity-30 select-none text-neutral-600">FOREX WEEKLY</span>
-        </div>
+        {article.imageUrl ? (
+          <img
+            src={article.imageUrl}
+            alt={article.title}
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+          />
+        ) : (
+          <div className="absolute inset-0 bg-neutral-200 dark:bg-neutral-800 flex items-center justify-center">
+            <span className="text-3xl font-bold font-serif opacity-30 select-none text-neutral-600">FOREX WEEKLY</span>
+          </div>
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
       </Link>
       

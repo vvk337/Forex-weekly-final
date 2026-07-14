@@ -133,20 +133,30 @@ export default async function ArticleDetailPage({ params }: ArticleDetailPagePro
             </div>
           </div>
 
-          {/* Featured visual placeholder representing high-end editorial chart or asset */}
-          <div className="w-full aspect-video bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded relative overflow-hidden flex items-center justify-center select-none">
-            <span className="text-4xl font-bold font-serif opacity-10 text-neutral-600">FOREX WEEKLY ANALYTICS</span>
-            {/* Draw a subtle abstract candle chart decoration */}
-            <div className="absolute inset-x-0 bottom-4 height-2/3 opacity-20 flex justify-around items-end px-12 pointer-events-none">
-              {[60, 80, 50, 90, 70, 110, 85, 120, 100, 140].map((h, i) => (
-                <div key={i} className="flex flex-col items-center w-3">
-                  <div className="w-[1px] h-6 bg-brand-red"></div>
-                  <div className="w-2.5 bg-brand-red rounded-sm" style={{ height: `${h / 2}px` }}></div>
-                  <div className="w-[1px] h-6 bg-brand-red"></div>
-                </div>
-              ))}
+          {/* Featured visual representing article image or editorial asset */}
+          {article.imageUrl ? (
+            <div className="w-full aspect-video border border-neutral-200 dark:border-neutral-800 rounded overflow-hidden relative shadow-sm">
+              <img
+                src={article.imageUrl}
+                alt={article.title}
+                className="w-full h-full object-cover transition-transform duration-500 hover:scale-[1.01]"
+              />
             </div>
-          </div>
+          ) : (
+            <div className="w-full aspect-video bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded relative overflow-hidden flex items-center justify-center select-none">
+              <span className="text-4xl font-bold font-serif opacity-10 text-neutral-600">FOREX WEEKLY ANALYTICS</span>
+              {/* Draw a subtle abstract candle chart decoration */}
+              <div className="absolute inset-x-0 bottom-4 opacity-20 flex justify-around items-end px-12 pointer-events-none">
+                {[60, 80, 50, 90, 70, 110, 85, 120, 100, 140].map((h, i) => (
+                  <div key={i} className="flex flex-col items-center w-3">
+                    <div className="w-[1px] h-6 bg-brand-red"></div>
+                    <div className="w-2.5 bg-brand-red rounded-sm" style={{ height: `${h / 2}px` }}></div>
+                    <div className="w-[1px] h-6 bg-brand-red"></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Article Text Content */}
           <div className="prose dark:prose-invert max-w-none text-sm leading-relaxed space-y-6 text-neutral-700 dark:text-neutral-300 whitespace-pre-wrap">

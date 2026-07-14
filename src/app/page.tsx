@@ -140,11 +140,19 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               {/* Large Hero Featured Article */}
               {featuredArticle && (
                 <div className="border border-neutral-200 dark:border-neutral-800 rounded overflow-hidden group hover:border-neutral-300 dark:hover:border-neutral-700 transition-all duration-300 bg-white dark:bg-brand-dark-card">
-                  {/* Visual Featured Image Placeholder */}
+                  {/* Visual Featured Image */}
                   <Link href={`/${featuredArticle.category}/${featuredArticle.id}`} className="relative block h-72 sm:h-96 w-full bg-neutral-100 dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-800 overflow-hidden cursor-pointer">
-                    <div className="absolute inset-0 bg-neutral-200 dark:bg-neutral-800 flex items-center justify-center">
-                      <span className="text-5xl font-bold font-serif opacity-20 select-none text-neutral-600 tracking-wider">FEATURED REPORT</span>
-                    </div>
+                    {featuredArticle.imageUrl ? (
+                      <img
+                        src={featuredArticle.imageUrl}
+                        alt={featuredArticle.title}
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.01]"
+                      />
+                    ) : (
+                      <div className="absolute inset-0 bg-neutral-200 dark:bg-neutral-800 flex items-center justify-center">
+                        <span className="text-5xl font-bold font-serif opacity-20 select-none text-neutral-600 tracking-wider">FEATURED REPORT</span>
+                      </div>
+                    )}
                     <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-neutral-950/20 to-transparent"></div>
                     
                     {/* Overlay Metadata */}
