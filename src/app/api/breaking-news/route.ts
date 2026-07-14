@@ -56,11 +56,17 @@ async function getOrCreateConfig() {
   });
 
   if (!config) {
+    const initialText = JSON.stringify([
+      { text: "ALERT: Federal Reserve hints at near-term interest rate cuts", expiryOption: "infinity", expiresAt: null },
+      { text: "EUR/USD hits new monthly highs as dollar softens", expiryOption: "infinity", expiresAt: null },
+      { text: "Gold spikes past $2,400 on geopolitical safe-haven demands", expiryOption: "infinity", expiresAt: null },
+      { text: "S&P 500 futures rise early before inflation updates", expiryOption: "infinity", expiresAt: null }
+    ]);
     config = await prisma.tickerConfig.create({
       data: {
         id: "ticker",
         mode: "auto",
-        manualText: "ALERT: Federal Reserve hints at near-term interest rate cuts | EUR/USD hits new monthly highs as dollar softens | Gold spikes past $2,400 on geopolitical safe-haven demands",
+        manualText: initialText,
       },
     });
   }
@@ -71,19 +77,52 @@ async function getOrCreateConfig() {
 export async function GET() {
   try {
     const config = await getOrCreateConfig();
-
-    if (config.mode === "manual") {
-      const manualAlerts = config.manualText
-        .split("|")
-        .map((text) => text.trim())
-        .filter((text) => text.length > 0);
-      return NextResponse.json({ mode: "manual", headlines: manualAlerts, manualText: config.manualText }, { status: 200 });
+    
+    // Parse manual headlines
+    let manualItems: any[] = [];
+    try {
+      if (config.manualText.trim().startsWith("[")) {
+        manualItems = JSON.parse(config.manualText);
+      } else {
+        // Fallback migration for old format
+        manualItems = config.manualText
+          .split("|")
+          .map((text) => ({
+            text: text.trim(),
+            expiryOption: "infinity",
+            expiresAt: null,
+          }))
+          .filter((item) => item.text.length > 0);
+      }
+    } catch (e) {
+      console.error("Error parsing manual headlines:", e);
     }
 
-    // Auto Mode: check cache first
+    // Filter out expired items
     const now = Date.now();
+    const activeManualItems = manualItems.filter((item) => {
+      if (item.expiresAt === null) return true;
+      return item.expiresAt > now;
+    });
+
+    const manualHeadlines = activeManualItems.map((item) => item.text);
+
+    // If mode is manual and we have active headlines, return them
+    if (config.mode === "manual" && manualHeadlines.length > 0) {
+      return NextResponse.json({ mode: "manual", headlines: manualHeadlines, manualText: config.manualText }, { status: 200 });
+    }
+
+    // If mode is manual but all manual items have expired, fall back to auto-pilot RSS feed
+    const isFallbackMode = config.mode === "manual" && manualHeadlines.length === 0;
+
+    // Auto Mode: check cache first
     if (cachedHeadlines.length > 0 && now - cacheTimestamp < CACHE_DURATION) {
-      return NextResponse.json({ mode: "auto", headlines: cachedHeadlines, manualText: config.manualText }, { status: 200 });
+      return NextResponse.json({ 
+        mode: isFallbackMode ? "manual" : "auto", 
+        headlines: cachedHeadlines, 
+        manualText: config.manualText,
+        isExpiredFallback: isFallbackMode
+      }, { status: 200 });
     }
 
     // Fetch fresh headlines from Yahoo Finance RSS
@@ -92,31 +131,36 @@ export async function GET() {
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         },
-        next: { revalidate: 300 }, // caching in Next.js fetch layer too
+        next: { revalidate: 300 },
       });
 
-      if (!response.ok) {
-        throw new Error("RSS Feed request failed");
-      }
+      if (response.ok) {
+        const xmlText = await response.text();
+        const parsed = parseRSSHeadlines(xmlText);
 
-      const xmlText = await response.text();
-      const parsed = parseRSSHeadlines(xmlText);
-
-      if (parsed.length > 0) {
-        cachedHeadlines = parsed;
-        cacheTimestamp = now;
-        return NextResponse.json({ mode: "auto", headlines: parsed, manualText: config.manualText }, { status: 200 });
+        if (parsed.length > 0) {
+          cachedHeadlines = parsed;
+          cacheTimestamp = now;
+          return NextResponse.json({ 
+            mode: isFallbackMode ? "manual" : "auto", 
+            headlines: parsed, 
+            manualText: config.manualText,
+            isExpiredFallback: isFallbackMode
+          }, { status: 200 });
+        }
       }
     } catch (fetchErr) {
-      console.error("RSS fetch error, falling back to static config text:", fetchErr);
+      console.error("RSS fetch error:", fetchErr);
     }
 
     // Fallback if RSS fetch fails entirely
-    const fallbackAlerts = config.manualText
-      .split("|")
-      .map((text) => text.trim())
-      .filter((text) => text.length > 0);
-    return NextResponse.json({ mode: "auto", headlines: fallbackAlerts, manualText: config.manualText, isFallback: true }, { status: 200 });
+    const fallbackManual = manualHeadlines.length > 0 ? manualHeadlines : ["ALERT: Real-time financial briefing ticker active"];
+    return NextResponse.json({ 
+      mode: config.mode, 
+      headlines: fallbackManual, 
+      manualText: config.manualText,
+      isFallback: true 
+    }, { status: 200 });
 
   } catch (error) {
     console.error("GET Breaking News Error:", error);
@@ -143,12 +187,12 @@ export async function PUT(request: Request) {
       where: { id: "ticker" },
       update: {
         mode,
-        manualText: manualText !== undefined ? manualText : "",
+        manualText: manualText !== undefined ? manualText : "[]",
       },
       create: {
         id: "ticker",
         mode,
-        manualText: manualText !== undefined ? manualText : "",
+        manualText: manualText !== undefined ? manualText : "[]",
       },
     });
 

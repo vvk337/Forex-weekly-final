@@ -32,6 +32,13 @@ interface DbMessage {
   createdAt: string;
 }
 
+interface TickerItem {
+  text: string;
+  expiryOption: string;
+  expiresAt: number | null;
+  isDirty?: boolean;
+}
+
 export default function AdminDashboardPage() {
   const router = useRouter();
   const [articles, setArticles] = useState<DbArticle[]>([]);
@@ -40,7 +47,7 @@ export default function AdminDashboardPage() {
   
   // Ticker states
   const [tickerMode, setTickerMode] = useState<"auto" | "manual">("auto");
-  const [tickerText, setTickerText] = useState("");
+  const [tickerItems, setTickerItems] = useState<TickerItem[]>([]);
   const [savingTicker, setSavingTicker] = useState(false);
   const [tickerMessage, setTickerMessage] = useState("");
 
@@ -73,7 +80,25 @@ export default function AdminDashboardPage() {
         if (!res.ok) throw new Error("Failed to load ticker settings");
         const data = await res.json();
         setTickerMode(data.mode);
-        setTickerText(data.manualText || "");
+        
+        let parsed = [];
+        try {
+          if (data.manualText && data.manualText.trim().startsWith("[")) {
+            parsed = JSON.parse(data.manualText);
+          } else if (data.manualText) {
+            parsed = data.manualText
+              .split("|")
+              .map((t: string) => ({ text: t.trim(), expiryOption: "infinity", expiresAt: null }))
+              .filter((x: any) => x.text.length > 0);
+          }
+        } catch (e) {
+          console.error("JSON parse manualText error in dashboard", e);
+        }
+
+        while (parsed.length < 4) {
+          parsed.push({ text: "", expiryOption: "infinity", expiresAt: null });
+        }
+        setTickerItems(parsed);
       }
     } catch (err: any) {
       setError(err.message || "Failed to load database content");
@@ -131,10 +156,45 @@ export default function AdminDashboardPage() {
     setError("");
 
     try {
+      // Filter out entirely empty items
+      const activeItems = tickerItems.filter((item) => item.text.trim() !== "");
+
+      // Map durations to milliseconds
+      const durationMap: Record<string, number> = {
+        "10m": 10 * 60 * 1000,
+        "20m": 20 * 60 * 1000,
+        "30m": 30 * 60 * 1000,
+        "1h": 60 * 60 * 1000,
+        "10h": 10 * 60 * 60 * 1000,
+        "12h": 12 * 60 * 60 * 1000,
+        "20h": 20 * 60 * 60 * 1000,
+        "24h": 24 * 60 * 60 * 1000,
+        "1d": 24 * 60 * 60 * 1000,
+      };
+
+      // Compute exact expiresAt for modified/dirty items
+      const finalItems = activeItems.map((item) => {
+        // If it's dirty or new (null expiresAt with finite option), calculate expiresAt
+        if (item.isDirty || (item.expiresAt === null && item.expiryOption !== "infinity")) {
+          const duration = durationMap[item.expiryOption];
+          return {
+            text: item.text.trim(),
+            expiryOption: item.expiryOption,
+            expiresAt: duration ? Date.now() + duration : null,
+          };
+        }
+        // Keep existing expiresAt
+        return {
+          text: item.text.trim(),
+          expiryOption: item.expiryOption,
+          expiresAt: item.expiresAt,
+        };
+      });
+
       const res = await fetch("/api/breaking-news", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: tickerMode, manualText: tickerText }),
+        body: JSON.stringify({ mode: tickerMode, manualText: JSON.stringify(finalItems) }),
       });
 
       const data = await res.json();
@@ -143,6 +203,13 @@ export default function AdminDashboardPage() {
       }
 
       setTickerMessage("News ticker configuration saved successfully!");
+      
+      // Update local state with padded entries
+      let updatedItems = [...finalItems];
+      while (updatedItems.length < 4) {
+        updatedItems.push({ text: "", expiryOption: "infinity", expiresAt: null });
+      }
+      setTickerItems(updatedItems);
     } catch (err: any) {
       setError(err.message || "Failed to update news ticker configuration");
     } finally {
@@ -371,7 +438,7 @@ export default function AdminDashboardPage() {
                             alt="Logo"
                             className="h-6 w-12 object-contain bg-white border border-neutral-200 p-0.5 rounded"
                           />
-                           <span className="text-[10px] text-emerald-500 font-semibold">Active</span>
+                          <span className="text-[10px] text-emerald-500 font-semibold">Active</span>
                         </div>
                       ) : (
                         <span className="text-[10px] text-neutral-400">Text Only</span>
@@ -393,7 +460,7 @@ export default function AdminDashboardPage() {
         </div>
       ) : activeTab === "ticker" ? (
         /* NEWS TICKER CONFIGURATION TAB */
-        <form onSubmit={handleSaveTicker} className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-6 shadow-sm max-w-xl space-y-6">
+        <form onSubmit={handleSaveTicker} className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-6 shadow-sm max-w-2xl space-y-6">
           <div>
             <h3 className="font-serif font-bold text-base text-brand-dark dark:text-white mb-1.5">
               Breaking News Ticker Settings
@@ -456,22 +523,105 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          <div>
-            <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 block mb-1.5">
-              Custom Override Headlines
-            </label>
-            <textarea
-              rows={4}
-              placeholder="e.g., URGENT: Fed raises benchmark rates by 25bps | NASDAQ trading volume spikes to monthly record"
-              value={tickerText}
-              onChange={(e) => setTickerText(e.target.value)}
-              disabled={tickerMode === "auto"}
-              className="w-full bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded px-4 py-2.5 text-xs text-brand-dark dark:text-white focus:outline-none focus:border-brand-red transition-colors disabled:opacity-40 resize-none leading-relaxed"
-            />
-            <span className="text-[10px] text-neutral-400 dark:text-neutral-500 block mt-1.5 leading-normal">
-              💡 <strong>Pro Tip:</strong> Separate multiple news alerts with a vertical bar <code className="bg-neutral-100 dark:bg-neutral-800 px-1 py-0.5 rounded text-[11px] font-mono text-brand-red">|</code> to make them scroll continuously.
-            </span>
-          </div>
+          {/* Multiple Boxes Editor for Manual Headlines */}
+          {tickerMode === "manual" && (
+            <div className="space-y-4 border-t border-neutral-100 dark:border-neutral-800/80 pt-5">
+              <div className="flex justify-between items-center">
+                <label className="text-[10px] font-extrabold uppercase tracking-widest text-brand-red">
+                  Manual Headlines Editor
+                </label>
+                <span className="text-[10px] text-neutral-450 font-bold uppercase">
+                  {tickerItems.filter(item => item.text.trim() !== "").length} Active / {tickerItems.length} Boxes
+                </span>
+              </div>
+
+              <div className="space-y-3.5">
+                {tickerItems.map((item, idx) => (
+                  <div key={idx} className="flex items-center space-x-2.5 bg-neutral-50/50 dark:bg-neutral-900/10 p-3 rounded border border-neutral-150 dark:border-neutral-850 transition-colors">
+                    <div className="flex-grow space-y-1">
+                      <span className="text-[9px] text-neutral-400 dark:text-neutral-500 font-bold uppercase tracking-wider block">
+                        Headline #{idx + 1}
+                      </span>
+                      <input
+                        type="text"
+                        placeholder={`Type breaking headline #${idx + 1}...`}
+                        value={item.text}
+                        onChange={(e) => {
+                          const updated = [...tickerItems];
+                          updated[idx].text = e.target.value;
+                          updated[idx].isDirty = true;
+                          setTickerItems(updated);
+                        }}
+                        className="w-full bg-transparent border-b border-transparent focus:border-brand-red focus:outline-none text-xs text-brand-dark dark:text-white font-medium py-0.5"
+                      />
+                    </div>
+
+                    {/* Expiry Dropdown */}
+                    <div className="shrink-0 flex flex-col space-y-1">
+                      <span className="text-[9px] text-neutral-400 dark:text-neutral-500 font-bold uppercase tracking-wider block">
+                        Expiry
+                      </span>
+                      <select
+                        value={item.expiryOption}
+                        onChange={(e) => {
+                          const updated = [...tickerItems];
+                          updated[idx].expiryOption = e.target.value;
+                          updated[idx].isDirty = true;
+                          setTickerItems(updated);
+                        }}
+                        className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-850 rounded px-2.5 py-1 text-[11px] text-brand-dark dark:text-neutral-200 font-semibold focus:outline-none cursor-pointer"
+                      >
+                        <option value="infinity">Infinity (Never)</option>
+                        <option value="10m">10 min</option>
+                        <option value="20m">20 min</option>
+                        <option value="30m">30 min</option>
+                        <option value="1h">1 hour</option>
+                        <option value="10h">10 hours</option>
+                        <option value="12h">12 hours</option>
+                        <option value="20h">20 hours</option>
+                        <option value="24h">24 hours</option>
+                        <option value="1d">1 day</option>
+                      </select>
+                    </div>
+
+                    {/* Delete Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updated = tickerItems.filter((_, i) => i !== idx);
+                        setTickerItems(updated);
+                      }}
+                      className="text-neutral-450 hover:text-red-600 p-1.5 mt-3 transition-colors shrink-0 cursor-pointer"
+                      title="Delete headline"
+                    >
+                      <svg className="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Add Headline control */}
+              {tickerItems.length < 11 ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (tickerItems.length >= 11) return;
+                    setTickerItems([...tickerItems, { text: "", expiryOption: "infinity", expiresAt: null }]);
+                  }}
+                  className="w-full py-2 border border-dashed border-neutral-300 dark:border-neutral-800 rounded text-center text-xs font-bold text-neutral-500 hover:border-neutral-450 dark:hover:border-neutral-700 hover:text-neutral-700 dark:hover:text-neutral-300 transition-all cursor-pointer"
+                >
+                  + Add News Headline Box ({tickerItems.length}/11)
+                </button>
+              ) : (
+                <p className="text-[10px] text-amber-500 font-bold text-center uppercase tracking-wider leading-relaxed pt-2">
+                  ⚠️ Maximum limit of 11 news headlines reached.
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="flex justify-end pt-4 border-t border-neutral-100 dark:border-neutral-800">
             <button
