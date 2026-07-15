@@ -68,7 +68,7 @@ export default function AdminDashboardPage() {
   const [savingTicker, setSavingTicker] = useState(false);
   const [tickerMessage, setTickerMessage] = useState("");
 
-  const [activeTab, setActiveTab] = useState<"articles" | "sponsors" | "inbox" | "ticker" | "users" | "reports">("articles");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "articles" | "sponsors" | "inbox" | "ticker" | "users" | "reports">("dashboard");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -88,6 +88,12 @@ export default function AdminDashboardPage() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [activeWorkspace, setActiveWorkspace] = useState<string>("Publication");
 
+  // UI state
+  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+
   useEffect(() => {
     fetch("/api/users/me")
       .then((res) => {
@@ -105,38 +111,110 @@ export default function AdminDashboardPage() {
       });
   }, []);
 
-  const getVisibleTabs = () => {
+  const getSidebarLinks = () => {
     if (!currentUser) return [];
 
-    const tabs: Array<{ id: "articles" | "sponsors" | "inbox" | "ticker" | "users" | "reports"; label: string }> = [];
     const role = currentUser.role;
+    const links: Array<{ id: "dashboard" | "articles" | "sponsors" | "inbox" | "ticker" | "users" | "reports"; label: string; icon: React.ReactNode }> = [
+      { 
+        id: "dashboard", 
+        label: "Dashboard", 
+        icon: (
+          <svg className="w-4 h-4 mr-2.5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+            <rect x="3" y="3" width="7" height="9"></rect>
+            <rect x="14" y="3" width="7" height="5"></rect>
+            <rect x="14" y="12" width="7" height="9"></rect>
+            <rect x="3" y="16" width="7" height="5"></rect>
+          </svg>
+        )
+      }
+    ];
 
     if (activeWorkspace === "Publication") {
-      tabs.push({ id: "articles", label: "Publications" });
-      tabs.push({ id: "ticker", label: "Breaking News" });
+      links.push({ 
+        id: "articles", 
+        label: "Publications", 
+        icon: (
+          <svg className="w-4 h-4 mr-2.5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+        ) 
+      });
+      links.push({ 
+        id: "ticker", 
+        label: "Breaking News", 
+        icon: (
+          <svg className="w-4 h-4 mr-2.5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+          </svg>
+        ) 
+      });
       
       if (role === "OWNER" || role === "ADMIN" || role === "SUPERVISOR") {
-        tabs.push({ id: "inbox", label: "Inbox Messages" });
+        links.push({ 
+          id: "inbox", 
+          label: "Inbox Messages", 
+          icon: (
+            <svg className="w-4 h-4 mr-2.5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+              <polyline points="22,6 12,13 2,6"></polyline>
+            </svg>
+          ) 
+        });
       }
     } else if (activeWorkspace === "Marketing") {
       if (role === "OWNER" || role === "ADMIN" || role === "SUPERVISOR") {
-        tabs.push({ id: "sponsors", label: "Sponsor Placements" });
+        links.push({ 
+          id: "sponsors", 
+          label: "Sponsor Placements", 
+          icon: (
+            <svg className="w-4 h-4 mr-2.5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+              <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+              <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+            </svg>
+          ) 
+        });
       }
     } else if (activeWorkspace === "Research") {
       if (role === "OWNER" || role === "ADMIN" || role === "SUPERVISOR") {
-        tabs.push({ id: "reports", label: "Research Overview" });
+        links.push({ 
+          id: "reports", 
+          label: "Research Overview", 
+          icon: (
+            <svg className="w-4 h-4 mr-2.5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+              <line x1="18" y1="20" x2="18" y2="10"></line>
+              <line x1="12" y1="20" x2="12" y2="4"></line>
+              <line x1="6" y1="20" x2="6" y2="14"></line>
+            </svg>
+          ) 
+        });
       }
     }
 
     // Users Directory is always visible to Owner/Admin
     if (role === "OWNER" || role === "ADMIN") {
-      tabs.push({ id: "users", label: "Users" });
+      links.push({ 
+        id: "users", 
+        label: "Users", 
+        icon: (
+          <svg className="w-4 h-4 mr-2.5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+          </svg>
+        ) 
+      });
     }
 
-    return tabs;
+    return links;
   };
 
-  const visibleTabs = getVisibleTabs();
+  const visibleTabs = getSidebarLinks();
 
   const allowedWorkspaces = currentUser?.role === "OWNER" || currentUser?.role === "ADMIN" || currentUser?.role === "SUPERVISOR"
     ? ["Publication", "Marketing", "Research"]
@@ -146,7 +224,7 @@ export default function AdminDashboardPage() {
     if (visibleTabs.length > 0) {
       const tabIds = visibleTabs.map((t) => t.id);
       if (!tabIds.includes(activeTab)) {
-        setActiveTab(tabIds[0]);
+        setActiveTab("dashboard"); // Default to dashboard on workspace changes
       }
     }
   }, [activeWorkspace, currentUser]);
@@ -156,27 +234,29 @@ export default function AdminDashboardPage() {
     setError("");
     setTickerMessage("");
     try {
-      if (activeTab === "articles") {
-        const res = await fetch("/api/articles");
-        if (!res.ok) throw new Error("Failed to load articles");
-        const data = await res.json();
-        setArticles(data);
-      } else if (activeTab === "sponsors") {
-        const res = await fetch("/api/sponsors");
-        if (!res.ok) throw new Error("Failed to load sponsored sections");
-        const data = await res.json();
-        setSponsors(data);
-      } else if (activeTab === "inbox") {
-        const res = await fetch("/api/contact");
-        if (!res.ok) throw new Error("Failed to load inbox messages");
-        const data = await res.json();
-        setMessages(data);
-      } else if (activeTab === "ticker") {
-        const res = await fetch("/api/breaking-news");
-        if (!res.ok) throw new Error("Failed to load ticker settings");
-        const data = await res.json();
+      // Pre-load all metrics needed for widgets
+      const articlesRes = await fetch("/api/articles");
+      if (articlesRes.ok) {
+        const articlesData = await articlesRes.json();
+        setArticles(articlesData);
+      }
+
+      const sponsorsRes = await fetch("/api/sponsors");
+      if (sponsorsRes.ok) {
+        const sponsorsData = await sponsorsRes.json();
+        setSponsors(sponsorsData);
+      }
+
+      const messagesRes = await fetch("/api/contact");
+      if (messagesRes.ok) {
+        const messagesData = await messagesRes.json();
+        setMessages(messagesData);
+      }
+
+      const tickerRes = await fetch("/api/breaking-news");
+      if (tickerRes.ok) {
+        const data = await tickerRes.json();
         setTickerMode(data.mode);
-        
         let parsed = [];
         try {
           if (data.manualText && data.manualText.trim().startsWith("[")) {
@@ -188,32 +268,31 @@ export default function AdminDashboardPage() {
               .filter((x: any) => x.text.length > 0);
           }
         } catch (e) {
-          console.error("JSON parse manualText error in dashboard", e);
+          console.error("JSON parse error", e);
         }
-
         while (parsed.length < 4) {
           parsed.push({ text: "", expiryOption: "infinity", expiresAt: null });
         }
         setTickerItems(parsed);
-      } else if (activeTab === "users") {
-        const queryParams = new URLSearchParams({
-          search: usersSearch,
-          role: usersRoleFilter,
-          status: usersStatusFilter,
-          department: usersDeptFilter,
-          archived: usersArchivedFilter ? "true" : "false",
-          sort: usersSort,
-          order: usersOrder,
-          page: usersPage.toString(),
-          limit: "10",
-        });
-        const res = await fetch(`/api/users?${queryParams}`);
-        if (!res.ok) throw new Error("Failed to load users list");
-        const data = await res.json();
+      }
+
+      // Fetch users list
+      const queryParams = new URLSearchParams({
+        search: usersSearch,
+        role: usersRoleFilter,
+        status: usersStatusFilter,
+        department: usersDeptFilter,
+        archived: usersArchivedFilter ? "true" : "false",
+        sort: usersSort,
+        order: usersOrder,
+        page: usersPage.toString(),
+        limit: "10",
+      });
+      const usersRes = await fetch(`/api/users?${queryParams}`);
+      if (usersRes.ok) {
+        const data = await usersRes.json();
         setUsers(data.users);
         setUsersTotal(data.total);
-      } else if (activeTab === "reports") {
-        // Static reports tab
       }
     } catch (err: any) {
       setError(err.message || "Failed to load database content");
@@ -234,6 +313,55 @@ export default function AdminDashboardPage() {
     usersSort,
     usersOrder,
   ]);
+
+  // Global simple search handler
+  useEffect(() => {
+    if (searchQuery.trim() === "") {
+      setSearchResults([]);
+      return;
+    }
+
+    const query = searchQuery.toLowerCase();
+    const results: any[] = [];
+
+    // Search Articles
+    articles.forEach(art => {
+      if (art.title.toLowerCase().includes(query) || art.author.toLowerCase().includes(query)) {
+        results.push({ type: "Publication", title: art.title, sub: `By ${art.author}`, action: () => { setActiveTab("articles"); setSearchQuery(""); } });
+      }
+    });
+
+    // Search Users
+    users.forEach(u => {
+      if (u.fullName.toLowerCase().includes(query) || u.username.toLowerCase().includes(query)) {
+        results.push({ type: "User", title: u.fullName, sub: `@${u.username}`, action: () => { setActiveTab("users"); setSearchQuery(""); } });
+      }
+    });
+
+    // Search Sponsors
+    sponsors.forEach(spo => {
+      if (spo.title.toLowerCase().includes(query)) {
+        results.push({ type: "Sponsor", title: spo.title, sub: `Link: ${spo.linkUrl}`, action: () => { setActiveTab("sponsors"); setSearchQuery(""); } });
+      }
+    });
+
+    // Search Pages/Navigation options
+    const pages = [
+      { title: "Publications Board", tab: "articles" },
+      { title: "Breaking News Ticker", tab: "ticker" },
+      { title: "Sponsor Placements", tab: "sponsors" },
+      { title: "Inbox Inquiries", tab: "inbox" },
+      { title: "Users Directory", tab: "users" },
+      { title: "Reports Dashboard", tab: "reports" },
+    ];
+    pages.forEach(p => {
+      if (p.title.toLowerCase().includes(query)) {
+        results.push({ type: "Page Link", title: p.title, sub: "Navigation shortcut", action: () => { setActiveTab(p.tab as any); setSearchQuery(""); } });
+      }
+    });
+
+    setSearchResults(results.slice(0, 8)); // Limit to 8 fast matches
+  }, [searchQuery, articles, users, sponsors]);
 
   const handleDelete = async (id: string) => {
     const actionText = currentUser?.role === "SUPERVISOR" ? "move this publication to trash" : "permanently delete this publication";
@@ -346,20 +474,248 @@ export default function AdminDashboardPage() {
     }
   };
 
+  // Helper to render dynamic breadcrumbs
+  const getBreadcrumbs = () => {
+    const activeLabel = visibleTabs.find((t) => t.id === activeTab)?.label || "Overview";
+    return (
+      <div className="flex items-center space-x-2 text-[11px] font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
+        <span>Control Room</span>
+        <span>&rsaquo;</span>
+        <span className="text-neutral-550 dark:text-neutral-400">{activeWorkspace}</span>
+        <span>&rsaquo;</span>
+        <span className="text-brand-red font-extrabold">{activeLabel}</span>
+      </div>
+    );
+  };
+
+  // Dynamic Dashboard Render (per role)
+  const renderDashboardWidgets = () => {
+    if (!currentUser) return null;
+    const role = currentUser.role;
+
+    // Filter data for widget counts
+    const myArticles = articles.filter(a => a.author === currentUser.username);
+    const myDrafts = myArticles.filter(a => a.title.toLowerCase().includes("[draft]") || a.category === "draft");
+    const myPublished = myArticles.filter(a => !a.title.toLowerCase().includes("[draft]") && a.category !== "draft");
+    const pendingReviews = articles.filter(a => a.title.toLowerCase().includes("[draft]") || a.category === "draft");
+
+    // Quick Actions Permission gates
+    const hasArticleCreate = role === "OWNER" || role === "ADMIN" || role === "SUPERVISOR" || role === "EMPLOYEE";
+    const hasTickerCreate = role === "OWNER" || role === "ADMIN" || role === "SUPERVISOR" || role === "EMPLOYEE";
+    const hasSponsorManage = role === "OWNER" || role === "ADMIN" || role === "SUPERVISOR";
+    const hasUserManage = role === "OWNER" || role === "ADMIN";
+
+    const QuickActionsWidget = (
+      <div className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-5 transition-colors">
+        <h4 className="text-[10px] font-extrabold uppercase tracking-widest text-brand-red mb-3">Quick Actions</h4>
+        <div className="grid grid-cols-1 gap-2.5">
+          {hasArticleCreate && (
+            <Link href="/admin/dashboard/create" className="flex items-center justify-between p-2.5 bg-neutral-50 hover:bg-neutral-100 dark:bg-neutral-900 dark:hover:bg-neutral-850 rounded border border-neutral-150 dark:border-neutral-800 text-xs font-bold text-neutral-755 dark:text-neutral-300 transition-colors">
+              <span>+ New Publication</span>
+              <span className="text-[10px] font-bold text-neutral-400">&rarr;</span>
+            </Link>
+          )}
+          {hasTickerCreate && (
+            <button onClick={() => setActiveTab("ticker")} className="flex items-center justify-between p-2.5 w-full bg-neutral-50 hover:bg-neutral-100 dark:bg-neutral-900 dark:hover:bg-neutral-850 rounded border border-neutral-150 dark:border-neutral-800 text-xs font-bold text-neutral-755 dark:text-neutral-300 text-left transition-colors cursor-pointer">
+              <span>Create Breaking News</span>
+              <span className="text-[10px] font-bold text-neutral-400">&rarr;</span>
+            </button>
+          )}
+          {hasSponsorManage && (
+            <button onClick={() => setActiveTab("sponsors")} className="flex items-center justify-between p-2.5 w-full bg-neutral-50 hover:bg-neutral-100 dark:bg-neutral-900 dark:hover:bg-neutral-850 rounded border border-neutral-150 dark:border-neutral-800 text-xs font-bold text-neutral-755 dark:text-neutral-300 text-left transition-colors cursor-pointer">
+              <span>Manage Placements</span>
+              <span className="text-[10px] font-bold text-neutral-400">&rarr;</span>
+            </button>
+          )}
+          {hasUserManage && (
+            <Link href="/admin/dashboard/users/create" className="flex items-center justify-between p-2.5 bg-neutral-50 hover:bg-neutral-100 dark:bg-neutral-900 dark:hover:bg-neutral-850 rounded border border-neutral-150 dark:border-neutral-800 text-xs font-bold text-neutral-755 dark:text-neutral-300 transition-colors">
+              <span>Invite New User</span>
+              <span className="text-[10px] font-bold text-neutral-400">&rarr;</span>
+            </Link>
+          )}
+        </div>
+      </div>
+    );
+
+    const EmployeeWidget = (
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          {/* Stats Bar */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-4 text-center">
+              <span className="text-[9px] font-extrabold uppercase tracking-widest text-neutral-400 dark:text-neutral-500">My Drafts</span>
+              <span className="text-2xl font-bold text-brand-dark dark:text-white block mt-1">{myDrafts.length}</span>
+            </div>
+            <div className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-4 text-center">
+              <span className="text-[9px] font-extrabold uppercase tracking-widest text-neutral-400 dark:text-neutral-500">My Published Articles</span>
+              <span className="text-2xl font-bold text-brand-dark dark:text-white block mt-1">{myPublished.length}</span>
+            </div>
+          </div>
+
+          {/* Drafts board */}
+          <div className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-5">
+            <h4 className="text-[10px] font-extrabold uppercase tracking-widest text-brand-red mb-3">My Draft Publications</h4>
+            {myDrafts.length === 0 ? (
+              <p className="text-xs text-neutral-450 italic py-4">No active draft publications found.</p>
+            ) : (
+              <div className="divide-y divide-neutral-100 dark:divide-neutral-850 font-medium">
+                {myDrafts.map((art) => (
+                  <div key={art.id} className="py-3 flex justify-between items-center text-xs">
+                    <span className="font-bold text-neutral-900 dark:text-neutral-200 max-w-[200px] truncate">{art.title}</span>
+                    <span className="text-neutral-400">{new Date(art.publishedAt).toLocaleDateString()}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="space-y-6">
+          {QuickActionsWidget}
+          <div className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-5 transition-colors">
+            <h4 className="text-[10px] font-extrabold uppercase tracking-widest text-brand-red mb-3">Online Status</h4>
+            <div className="flex items-center space-x-2">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 block"></span>
+              <span className="text-xs font-bold text-neutral-700 dark:text-neutral-350">Active Session - Editor</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+
+    const SupervisorWidget = (
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          {/* Pending reviews list */}
+          <div className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-5">
+            <h4 className="text-[10px] font-extrabold uppercase tracking-widest text-brand-red mb-3">Pending Editorial Reviews</h4>
+            {pendingReviews.length === 0 ? (
+              <p className="text-xs text-neutral-450 italic py-4">No publications awaiting approval.</p>
+            ) : (
+              <div className="divide-y divide-neutral-100 dark:divide-neutral-850 font-medium">
+                {pendingReviews.map((art) => (
+                  <div key={art.id} className="py-3.5 flex justify-between items-center text-xs">
+                    <div>
+                      <div className="font-bold text-neutral-900 dark:text-neutral-200">{art.title}</div>
+                      <div className="text-[10px] text-neutral-450 mt-0.5">By {art.author}</div>
+                    </div>
+                    <button onClick={() => { setActiveTab("articles"); }} className="text-[10px] uppercase font-bold text-brand-red hover:underline cursor-pointer">
+                      Review &rsaquo;
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="space-y-6">
+          {QuickActionsWidget}
+          <div className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-5">
+            <h4 className="text-[10px] font-extrabold uppercase tracking-widest text-brand-red mb-3">Department Scope</h4>
+            <span className="text-xs font-bold text-neutral-600 dark:text-neutral-300">
+              Supervising: {currentUser?.departments?.join(", ") || "Publications"}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+
+    const AdminWidget = (
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          {/* Users preview */}
+          <div className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-5">
+            <h4 className="text-[10px] font-extrabold uppercase tracking-widest text-brand-red mb-3">Users Directory Preview</h4>
+            <div className="divide-y divide-neutral-100 dark:divide-neutral-850 font-medium">
+              {users.slice(0, 5).map((u) => (
+                <div key={u.id} className="py-3 flex justify-between items-center text-xs">
+                  <div>
+                    <span className="font-bold text-neutral-900 dark:text-neutral-200">{u.fullName}</span>
+                    <span className="text-[10px] text-neutral-450 ml-1 font-mono">@{u.username}</span>
+                  </div>
+                  <span className="text-[10px] font-bold uppercase text-brand-red">{u.role}</span>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setActiveTab("users")} className="text-[10px] uppercase font-bold text-neutral-450 hover:text-brand-red transition-colors block mt-4 text-center w-full">
+              View All Directory Users &rsaquo;
+            </button>
+          </div>
+        </div>
+        <div className="space-y-6">
+          {QuickActionsWidget}
+        </div>
+      </div>
+    );
+
+    const OwnerWidget = (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-4 text-center">
+            <span className="text-[9px] font-extrabold uppercase tracking-widest text-neutral-400 dark:text-neutral-500">Platform Users</span>
+            <span className="text-2xl font-bold text-brand-dark dark:text-white block mt-1">{users.length}</span>
+          </div>
+          <div className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-4 text-center">
+            <span className="text-[9px] font-extrabold uppercase tracking-widest text-neutral-400 dark:text-neutral-500">Publications Total</span>
+            <span className="text-2xl font-bold text-brand-dark dark:text-white block mt-1">{articles.length}</span>
+          </div>
+          <div className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-4 text-center">
+            <span className="text-[9px] font-extrabold uppercase tracking-widest text-neutral-400 dark:text-neutral-500">Active Campaigns</span>
+            <span className="text-2xl font-bold text-brand-dark dark:text-white block mt-1">{sponsors.length}</span>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            {/* Combined pending lists for Owner */}
+            <div className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-5">
+              <h4 className="text-[10px] font-extrabold uppercase tracking-widest text-brand-red mb-3">Owner Master Console</h4>
+              <p className="text-xs text-neutral-455 leading-relaxed mb-4">
+                Accessing platform-wide overrides. Select appropriate workspaces or search query boxes above.
+              </p>
+            </div>
+          </div>
+          <div className="space-y-6">
+            {QuickActionsWidget}
+          </div>
+        </div>
+      </div>
+    );
+
+    if (role === "EMPLOYEE") return EmployeeWidget;
+    if (role === "SUPERVISOR") return SupervisorWidget;
+    if (role === "ADMIN") return AdminWidget;
+    if (role === "OWNER") return OwnerWidget;
+    return null;
+  };
+
   const renderTabContent = () => {
     if (loading) {
+      // Skeleton loader placeholder to prevent layout shifts
       return (
-        <div className="text-center py-12 text-xs text-neutral-400 font-bold uppercase tracking-widest animate-pulse">
-          Retrieving database records...
+        <div className="space-y-6 animate-pulse">
+          <div className="h-10 bg-neutral-200 dark:bg-neutral-850 rounded w-1/4"></div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+            <div className="h-24 bg-neutral-200 dark:bg-neutral-850 rounded"></div>
+            <div className="h-24 bg-neutral-200 dark:bg-neutral-850 rounded"></div>
+            <div className="h-24 bg-neutral-200 dark:bg-neutral-850 rounded"></div>
+          </div>
+          <div className="h-64 bg-neutral-200 dark:bg-neutral-850 rounded"></div>
         </div>
       );
     }
 
     switch (activeTab) {
+      case "dashboard":
+        return renderDashboardWidgets();
+
       case "articles":
         return articles.length === 0 ? (
-          <div className="text-center py-12 border border-dashed border-neutral-200 dark:border-neutral-800 rounded text-neutral-400 text-xs uppercase font-bold tracking-widest">
-            Database contains no publications. Click "+ New Publication" to create one.
+          <div className="text-center py-16 border border-dashed border-neutral-200 dark:border-neutral-800 rounded text-neutral-400 text-xs uppercase font-bold tracking-widest">
+            Database contains no publications.
+            <div className="mt-4">
+              <Link href="/admin/dashboard/create" className="inline-flex items-center bg-brand-red hover:bg-brand-red-dark text-white text-xs font-bold uppercase tracking-wider py-2 px-4 rounded-sm transition-all">
+                Create your first article
+              </Link>
+            </div>
           </div>
         ) : (
           <div className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded overflow-hidden">
@@ -423,12 +779,16 @@ export default function AdminDashboardPage() {
         );
 
       case "sponsors":
-        return (
+        return sponsors.length === 0 ? (
+          <div className="text-center py-16 border border-dashed border-neutral-200 dark:border-neutral-800 rounded text-neutral-400 text-xs uppercase font-bold tracking-widest">
+            No active advertising placements found.
+          </div>
+        ) : (
           <div className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="border-b border-neutral-100 dark:border-neutral-850 text-[10px] uppercase font-bold tracking-wider text-neutral-400 dark:text-neutral-500 bg-neutral-50 dark:bg-neutral-900/50">
+                  <tr className="border-b border-neutral-100 dark:border-neutral-855 text-[10px] uppercase font-bold tracking-wider text-neutral-400 dark:text-neutral-500 bg-neutral-50 dark:bg-neutral-900/50">
                     <th className="py-3 px-5">Ad Placement</th>
                     <th className="py-3 px-5">Sponsor Title</th>
                     <th className="py-3 px-5">Target Link</th>
@@ -511,7 +871,7 @@ export default function AdminDashboardPage() {
                       onChange={() => setTickerMode("auto")}
                       className="accent-brand-red cursor-pointer"
                     />
-                    <span className="text-xs font-bold text-neutral-850 dark:text-neutral-100">
+                    <span className="text-xs font-bold text-neutral-855 dark:text-neutral-100">
                       Automatic Mode (Free Feed)
                     </span>
                   </div>
@@ -534,7 +894,7 @@ export default function AdminDashboardPage() {
                       onChange={() => setTickerMode("manual")}
                       className="accent-brand-red cursor-pointer"
                     />
-                    <span className="text-xs font-bold text-neutral-850 dark:text-neutral-100">
+                    <span className="text-xs font-bold text-neutral-855 dark:text-neutral-100">
                       Manual Override Mode
                     </span>
                   </div>
@@ -658,7 +1018,7 @@ export default function AdminDashboardPage() {
 
       case "inbox":
         return messages.length === 0 ? (
-          <div className="text-center py-12 border border-dashed border-neutral-200 dark:border-neutral-800 rounded text-neutral-400 text-xs uppercase font-bold tracking-widest">
+          <div className="text-center py-16 border border-dashed border-neutral-200 dark:border-neutral-800 rounded text-neutral-400 text-xs uppercase font-bold tracking-widest">
             Inbox is empty. No messages submitted.
           </div>
         ) : (
@@ -686,7 +1046,7 @@ export default function AdminDashboardPage() {
                           {msg.email}
                         </a>
                       </td>
-                      <td className="py-4 px-5 max-w-[150px] truncate text-neutral-850 dark:text-neutral-300 font-bold">
+                      <td className="py-4 px-5 max-w-[150px] truncate text-neutral-855 dark:text-neutral-300 font-bold">
                         {msg.subject}
                       </td>
                       <td className="py-4 px-5 max-w-sm text-neutral-500 dark:text-neutral-400 text-xs leading-normal">
@@ -811,7 +1171,7 @@ export default function AdminDashboardPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
-                      <tr className="border-b border-neutral-100 dark:border-neutral-850 text-[10px] uppercase font-bold tracking-wider text-neutral-400 dark:text-neutral-500 bg-neutral-50 dark:bg-neutral-900/50">
+                      <tr className="border-b border-neutral-100 dark:border-neutral-855 text-[10px] uppercase font-bold tracking-wider text-neutral-400 dark:text-neutral-500 bg-neutral-50 dark:bg-neutral-900/50">
                         <th className="py-3 px-5">Photo</th>
                         <th className="py-3 px-5">User Details</th>
                         <th className="py-3 px-5">Role</th>
@@ -831,7 +1191,7 @@ export default function AdminDashboardPage() {
                             <img
                               src={u.profilePhoto || "/images/default-avatar.png"}
                               alt={u.fullName}
-                              className="h-8 w-8 rounded-full object-cover border border-neutral-200 dark:border-neutral-850 bg-white"
+                              className="h-8 w-8 rounded-full object-cover border border-neutral-200 dark:border-neutral-855 bg-white"
                               onError={(e) => {
                                 (e.target as HTMLImageElement).src = "/images/default-avatar.png";
                               }}
@@ -947,7 +1307,7 @@ export default function AdminDashboardPage() {
               <h2 className="font-serif font-bold text-lg text-brand-dark dark:text-white mb-3">
                 Research &amp; Platform Metrics
               </h2>
-              <p className="text-xs text-neutral-450 mb-6">
+              <p className="text-xs text-neutral-455 mb-6">
                 View content statistics, publication metrics, and platform performance logs for assigned departments.
               </p>
 
@@ -960,7 +1320,7 @@ export default function AdminDashboardPage() {
                   <span className="text-[10px] font-extrabold uppercase tracking-widest text-neutral-400 dark:text-neutral-500 block">Sponsored Campaigns</span>
                   <span className="text-2xl font-bold text-brand-dark dark:text-white mt-1.5 block">{sponsors.length}</span>
                 </div>
-                <div className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-150 dark:border-neutral-850 p-4 rounded text-center">
+                <div className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-150 dark:border-neutral-855 p-4 rounded text-center">
                   <span className="text-[10px] font-extrabold uppercase tracking-widest text-neutral-400 dark:text-neutral-500 block">Active Team Members</span>
                   <span className="text-2xl font-bold text-brand-dark dark:text-white mt-1.5 block">{users.length || 1}</span>
                 </div>
@@ -968,7 +1328,7 @@ export default function AdminDashboardPage() {
 
               <div className="mt-8 border-t border-neutral-100 dark:border-neutral-850 pt-5 space-y-4">
                 <span className="text-[10px] font-extrabold uppercase tracking-widest text-brand-red block">Recent Platform Events Log</span>
-                <div className="bg-neutral-50/50 dark:bg-neutral-900/20 rounded border border-neutral-150 dark:border-neutral-850 p-3 font-mono text-[10px] text-neutral-500 space-y-2">
+                <div className="bg-neutral-50/50 dark:bg-neutral-900/20 rounded border border-neutral-150 dark:border-neutral-855 p-3 font-mono text-[10px] text-neutral-500 space-y-2">
                   <div>[INFO] {new Date().toLocaleDateString()} - Seeding and relational schema migrations verified successfully.</div>
                   <div>[INFO] {new Date().toLocaleDateString()} - Expiry check scheduler verified. Active sessions: {users.filter(u => u.isOnline).length || 1} online.</div>
                 </div>
@@ -982,32 +1342,39 @@ export default function AdminDashboardPage() {
     }
   };
 
-  return (
-    <div className="w-full space-y-8 animate-fadeIn">
-      {/* Dashboard Header */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center border-b border-neutral-200 dark:border-neutral-800 pb-5 gap-4">
-        <div>
-          <span className="text-[10px] font-extrabold uppercase tracking-widest text-brand-red font-sans">Control Room</span>
-          <h1 className="font-serif font-bold text-2xl sm:text-3xl text-brand-dark dark:text-white mt-1">
-            Editorial Console
-          </h1>
-          <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-1">
-            Manage your financial portal publications, articles, sponsored placements, and support inquiries.
-          </p>
-        </div>
+  const showWorkspaceDropdown = allowedWorkspaces.length > 1;
 
-        <div className="flex flex-wrap items-center gap-3 shrink-0">
-          {/* Workspace Selector */}
-          {currentUser && (
-            <div className="flex items-center space-x-2 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-855 rounded-sm px-3 py-2 text-xs text-brand-dark dark:text-neutral-250 transition-colors">
-              <span className="text-[10px] uppercase font-extrabold text-neutral-400 dark:text-neutral-500">Workspace:</span>
+  return (
+    <div className="min-h-screen flex bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 transition-colors duration-300">
+      
+      {/* 1. LEFT SIDEBAR */}
+      <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-white dark:bg-neutral-900 border-r border-neutral-200 dark:border-neutral-800 flex flex-col justify-between transform transition-transform duration-300 md:translate-x-0 ${showMobileSidebar ? "translate-x-0" : "-translate-x-full"}`}>
+        <div>
+          {/* Logo Brand Header */}
+          <div className="p-6 border-b border-neutral-100 dark:border-neutral-850 flex items-center justify-between">
+            <Link href="/admin/dashboard" className="flex items-center space-x-2.5">
+              <span className="h-6 w-6 rounded bg-brand-red flex items-center justify-center text-white font-extrabold text-sm">FW</span>
+              <span className="font-serif font-bold text-sm tracking-tight text-brand-dark dark:text-white">Weekly Control</span>
+            </Link>
+            <button onClick={() => setShowMobileSidebar(false)} className="md:hidden text-neutral-450 hover:text-neutral-800 cursor-pointer">
+              <svg className="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+
+          {/* Workspace Dropdown Selector (if user has > 1 workspaces) */}
+          {showWorkspaceDropdown && currentUser && (
+            <div className="px-6 py-4 border-b border-neutral-100 dark:border-neutral-850">
+              <label className="text-[9px] font-extrabold uppercase tracking-widest text-neutral-400 dark:text-neutral-500 block mb-1">Active Workspace</label>
               <select
                 value={activeWorkspace}
                 onChange={(e) => setActiveWorkspace(e.target.value)}
-                className="bg-transparent font-extrabold text-brand-dark dark:text-neutral-200 focus:outline-none cursor-pointer"
+                className="w-full bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 text-xs font-bold py-1.5 px-2.5 rounded text-brand-dark dark:text-neutral-200 focus:outline-none cursor-pointer"
               >
                 {allowedWorkspaces.map((ws: string) => (
-                  <option key={ws} value={ws} className="bg-white dark:bg-neutral-950 text-brand-dark dark:text-neutral-250 font-bold">
+                  <option key={ws} value={ws} className="bg-white dark:bg-neutral-955 text-neutral-200">
                     {ws} Workspace
                   </option>
                 ))}
@@ -1015,72 +1382,166 @@ export default function AdminDashboardPage() {
             </div>
           )}
 
-          {activeTab === "users" ? (
-            <>
-              <Link
-                href="/admin/dashboard/profile"
-                className="inline-flex items-center border border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-900 text-neutral-650 dark:text-neutral-355 hover:text-neutral-800 dark:hover:text-neutral-100 text-xs font-bold uppercase tracking-wider py-2.5 px-4 rounded-sm transition-all"
+          {/* Navigation Links list */}
+          <nav className="p-4 space-y-1">
+            {visibleTabs.map((link) => (
+              <button
+                key={link.id}
+                onClick={() => {
+                  setActiveTab(link.id);
+                  setShowMobileSidebar(false);
+                }}
+                className={`w-full flex items-center px-3 py-2 rounded-sm text-xs font-bold transition-all text-left cursor-pointer ${
+                  activeTab === link.id
+                    ? "bg-brand-red text-white"
+                    : "text-neutral-550 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-850"
+                }`}
               >
-                My Profile
-              </Link>
-              <Link
-                href="/admin/dashboard/users/create"
-                className="inline-flex items-center bg-brand-red hover:bg-brand-red-dark text-white text-xs font-bold uppercase tracking-wider py-2.5 px-4 rounded-sm transition-all"
-              >
-                + Add User
-              </Link>
-            </>
-          ) : (
-            <Link
-              href="/admin/dashboard/create"
-              className="inline-flex items-center bg-brand-red hover:bg-brand-red-dark text-white text-xs font-bold uppercase tracking-wider py-2.5 px-4 rounded-sm transition-all"
-            >
-              + New Publication
-            </Link>
+                {link.icon}
+                <span>{link.label}</span>
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        {/* Footer Profile card */}
+        {currentUser && (
+          <div className="p-4 border-t border-neutral-100 dark:border-neutral-850 flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <img
+                src={currentUser.profilePhoto || "/images/default-avatar.png"}
+                alt={currentUser.fullName}
+                className="h-8 w-8 rounded-full object-cover border border-neutral-200 dark:border-neutral-800"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = "/images/default-avatar.png";
+                }}
+              />
+              <div className="min-w-0">
+                <div className="text-xs font-bold text-neutral-800 dark:text-neutral-200 truncate">{currentUser.fullName}</div>
+                <div className="text-[10px] text-neutral-450 font-mono truncate">@{currentUser.username}</div>
+              </div>
+            </div>
+            <button onClick={() => setShowProfileMenu(!showProfileMenu)} className="text-neutral-450 hover:text-neutral-800 cursor-pointer">
+              <svg className="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="1"></circle>
+                <circle cx="12" cy="5" r="1"></circle>
+                <circle cx="12" cy="19" r="1"></circle>
+              </svg>
+            </button>
+          </div>
+        )}
+      </aside>
+
+      {/* Profile menu floating panel */}
+      {showProfileMenu && currentUser && (
+        <div className="fixed bottom-16 left-4 z-50 w-56 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded shadow-lg p-2 animate-fadeIn text-xs font-semibold">
+          <div className="px-3 py-2 border-b border-neutral-100 dark:border-neutral-850">
+            <span className="text-[9px] uppercase font-extrabold text-neutral-400 block">Workspace</span>
+            <span className="text-brand-dark dark:text-neutral-200 font-bold">{activeWorkspace} Workspace</span>
+          </div>
+          <Link href="/admin/dashboard/profile" className="block px-3 py-2 hover:bg-neutral-50 dark:hover:bg-neutral-855 rounded text-neutral-700 dark:text-neutral-300">
+            My Profile
+          </Link>
+          <Link href="/admin/dashboard/profile" className="block px-3 py-2 hover:bg-neutral-50 dark:hover:bg-neutral-855 rounded text-neutral-700 dark:text-neutral-300 border-b border-neutral-100 dark:border-neutral-850">
+            Account Settings
+          </Link>
+          <button onClick={handleLogout} className="w-full text-left px-3 py-2 hover:bg-neutral-50 dark:hover:bg-neutral-855 rounded text-red-500 font-bold cursor-pointer">
+            Logout Session
+          </button>
+        </div>
+      )}
+
+      {/* Overlays for mobile sidebar */}
+      {showMobileSidebar && (
+        <div onClick={() => setShowMobileSidebar(false)} className="fixed inset-0 bg-neutral-955/40 z-30 md:hidden transition-opacity"></div>
+      )}
+
+      {/* 2. RIGHT CONTENT PANEL */}
+      <main className="flex-1 flex flex-col min-w-0 md:pl-64">
+        
+        {/* Top Navbar */}
+        <header className="h-16 border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 flex items-center justify-between px-6 transition-colors duration-300">
+          <div className="flex items-center space-x-3">
+            <button onClick={() => setShowMobileSidebar(true)} className="md:hidden text-neutral-450 hover:text-neutral-800 cursor-pointer">
+              <svg className="w-6 h-6 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
+              </svg>
+            </button>
+            {getBreadcrumbs()}
+          </div>
+
+          <div className="flex items-center space-x-4">
+            {/* Global Search input */}
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg className="w-3.5 h-3.5 text-neutral-400 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+              </div>
+              <input
+                type="text"
+                placeholder="Search console..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 text-xs rounded-sm pl-9 pr-4 py-1.5 w-40 sm:w-56 focus:outline-none focus:border-brand-red focus:w-64 transition-all text-neutral-800 dark:text-neutral-200"
+              />
+
+              {/* Floating search results popover */}
+              {searchResults.length > 0 && (
+                <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-neutral-900 border border-neutral-250 dark:border-neutral-800 rounded shadow-lg z-50 max-h-80 overflow-y-auto divide-y divide-neutral-100 dark:divide-neutral-850">
+                  {searchResults.map((res, i) => (
+                    <button
+                      key={i}
+                      onClick={res.action}
+                      className="w-full text-left px-4 py-2.5 hover:bg-neutral-50 dark:hover:bg-neutral-850 flex flex-col transition-colors cursor-pointer"
+                    >
+                      <div className="flex justify-between items-center w-full">
+                        <span className="font-bold text-neutral-800 dark:text-neutral-200 text-xs">{res.title}</span>
+                        <span className="text-[8px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded bg-brand-red/10 text-brand-red border border-brand-red/15">{res.type}</span>
+                      </div>
+                      <span className="text-[10px] text-neutral-450 mt-0.5 truncate">{res.sub}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Quick mini-avatar profile link */}
+            {currentUser && (
+              <img
+                src={currentUser.profilePhoto || "/images/default-avatar.png"}
+                alt={currentUser.fullName}
+                onClick={() => setShowProfileMenu(!showProfileMenu)}
+                className="h-8 w-8 rounded-full object-cover border border-neutral-255 dark:border-neutral-800 cursor-pointer"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = "/images/default-avatar.png";
+                }}
+              />
+            )}
+          </div>
+        </header>
+
+        {/* Dashboard Content Container */}
+        <div className="p-6 md:p-8 max-w-7xl w-full mx-auto space-y-6">
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/30 text-red-500 p-4 rounded text-xs font-bold">
+              {error}
+            </div>
           )}
-          <button
-            onClick={handleLogout}
-            className="border border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-900 text-neutral-655 dark:text-neutral-355 hover:text-neutral-800 dark:hover:text-neutral-100 text-xs font-bold uppercase tracking-wider py-2.5 px-4 rounded-sm transition-colors cursor-pointer"
-          >
-            Log Out
-          </button>
+
+          {tickerMessage && (
+            <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-450 p-4 rounded text-xs font-bold">
+              {tickerMessage}
+            </div>
+          )}
+
+          {/* Render Tab Content Panel */}
+          {renderTabContent()}
         </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex border-b border-neutral-200 dark:border-neutral-800">
-        {visibleTabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => {
-              if (tab.id === "users") setUsersPage(1);
-              setActiveTab(tab.id);
-            }}
-            className={`py-3 px-6 text-xs uppercase font-bold tracking-wider border-b-2 transition-all cursor-pointer ${
-              activeTab === tab.id
-                ? "border-brand-red text-brand-red font-extrabold"
-                : "border-transparent text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {error && (
-        <div className="bg-red-500/10 border border-red-500/30 text-red-500 p-4 rounded text-xs font-bold">
-          {error}
-        </div>
-      )}
-
-      {tickerMessage && (
-        <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-450 p-4 rounded text-xs font-bold">
-          {tickerMessage}
-        </div>
-      )}
-
-      {/* Dynamic Tab Content */}
-      {renderTabContent()}
+      </main>
     </div>
   );
 }
