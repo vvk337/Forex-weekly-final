@@ -41,7 +41,7 @@ async function getArticles(search?: string) {
     }
     
     // Build search filters if query exists
-    const where: any = {};
+    const where: any = { status: "PUBLISHED" };
     if (search) {
       where.OR = [
         { title: { contains: search } },

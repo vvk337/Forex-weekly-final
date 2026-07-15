@@ -6,7 +6,7 @@ import ArticleCard from "@/components/ui/ArticleCard";
 async function getEducationalArticles() {
   try {
     const dbArticles = await prisma.article.findMany({
-      where: { category: "learn-forex" },
+      where: { category: "learn-forex", status: "PUBLISHED" },
       orderBy: { publishedAt: "desc" },
     });
 

@@ -12,6 +12,13 @@ interface DbArticle {
   publishedAt: string;
   author: string;
   isFeatured: boolean;
+  status: "DRAFT" | "PENDING" | "PUBLISHED" | "SCHEDULED" | "ARCHIVED" | "TRASH";
+  scheduledAt: string | null;
+  publishedBy: string | null;
+  editedBy: string | null;
+  revisionComment: string | null;
+  department: string;
+  updatedAt: string;
 }
 
 interface DbSponsor {
@@ -93,6 +100,21 @@ export default function AdminDashboardPage() {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
+
+  // Editorial workflow UI states
+  const [articleSubFilter, setArticleSubFilter] = useState<"DRAFT" | "PENDING" | "PUBLISHED" | "SCHEDULED" | "ARCHIVED" | "TRASH">("PUBLISHED");
+  const [expandedArticleId, setExpandedArticleId] = useState<string | null>(null);
+  const [revisionCommentInput, setRevisionCommentInput] = useState("");
+  const [activeRevisionArticleId, setActiveRevisionArticleId] = useState<string | null>(null);
+  const [scheduleDateInput, setScheduleDateInput] = useState("");
+  const [activeScheduleArticleId, setActiveScheduleArticleId] = useState<string | null>(null);
+
+  // Article filter inputs
+  const [articleAuthorFilter, setArticleAuthorFilter] = useState("");
+  const [articleDeptFilter, setArticleDeptFilter] = useState("");
+  const [articleSearchQuery, setArticleSearchQuery] = useState("");
+  const [articleDateStart, setArticleDateStart] = useState("");
+  const [articleDateEnd, setArticleDateEnd] = useState("");
 
   useEffect(() => {
     fetch("/api/users/me")
@@ -224,7 +246,7 @@ export default function AdminDashboardPage() {
     if (visibleTabs.length > 0) {
       const tabIds = visibleTabs.map((t) => t.id);
       if (!tabIds.includes(activeTab)) {
-        setActiveTab("dashboard"); // Default to dashboard on workspace changes
+        setActiveTab("dashboard");
       }
     }
   }, [activeWorkspace, currentUser]);
@@ -234,8 +256,15 @@ export default function AdminDashboardPage() {
     setError("");
     setTickerMessage("");
     try {
-      // Pre-load all metrics needed for widgets
-      const articlesRes = await fetch("/api/articles");
+      // Build search params for backend filtering
+      const articlesParams = new URLSearchParams();
+      if (articleSearchQuery) articlesParams.set("search", articleSearchQuery);
+      if (articleAuthorFilter) articlesParams.set("author", articleAuthorFilter);
+      if (articleDeptFilter) articlesParams.set("department", articleDeptFilter);
+      if (articleDateStart) articlesParams.set("dateStart", articleDateStart);
+      if (articleDateEnd) articlesParams.set("dateEnd", articleDateEnd);
+
+      const articlesRes = await fetch(`/api/articles?${articlesParams}`);
       if (articlesRes.ok) {
         const articlesData = await articlesRes.json();
         setArticles(articlesData);
@@ -312,6 +341,12 @@ export default function AdminDashboardPage() {
     usersArchivedFilter,
     usersSort,
     usersOrder,
+    // Add publication filters to triggers
+    articleAuthorFilter,
+    articleDeptFilter,
+    articleSearchQuery,
+    articleDateStart,
+    articleDateEnd,
   ]);
 
   // Global simple search handler
@@ -360,7 +395,7 @@ export default function AdminDashboardPage() {
       }
     });
 
-    setSearchResults(results.slice(0, 8)); // Limit to 8 fast matches
+    setSearchResults(results.slice(0, 8));
   }, [searchQuery, articles, users, sponsors]);
 
   const handleDelete = async (id: string) => {
@@ -375,6 +410,40 @@ export default function AdminDashboardPage() {
       fetchData();
     } catch (err: any) {
       setError(err.message || "Failed to delete article");
+    }
+  };
+
+  const handleUpdateStatus = async (id: string, nextStatus: string, extra = {}) => {
+    try {
+      const res = await fetch(`/api/articles/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus, ...extra }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || "Failed to transition status");
+      }
+      fetchData();
+      setActiveRevisionArticleId(null);
+      setActiveScheduleArticleId(null);
+    } catch (err: any) {
+      setError(err.message || "Status change failed");
+    }
+  };
+
+  const handleRestoreTrash = async (id: string) => {
+    try {
+      const res = await fetch(`/api/articles/${id}?action=restore`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || "Failed to restore article");
+      }
+      fetchData();
+    } catch (err: any) {
+      setError(err.message || "Restoring draft failed");
     }
   };
 
@@ -474,7 +543,6 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // Helper to render dynamic breadcrumbs
   const getBreadcrumbs = () => {
     const activeLabel = visibleTabs.find((t) => t.id === activeTab)?.label || "Overview";
     return (
@@ -488,18 +556,18 @@ export default function AdminDashboardPage() {
     );
   };
 
-  // Dynamic Dashboard Render (per role)
+  // Filter in memory for immediate counts
+  const filteredArticles = articles.filter(a => a.status === articleSubFilter);
+
   const renderDashboardWidgets = () => {
     if (!currentUser) return null;
     const role = currentUser.role;
 
-    // Filter data for widget counts
     const myArticles = articles.filter(a => a.author === currentUser.username);
-    const myDrafts = myArticles.filter(a => a.title.toLowerCase().includes("[draft]") || a.category === "draft");
-    const myPublished = myArticles.filter(a => !a.title.toLowerCase().includes("[draft]") && a.category !== "draft");
-    const pendingReviews = articles.filter(a => a.title.toLowerCase().includes("[draft]") || a.category === "draft");
+    const myDrafts = myArticles.filter(a => a.status === "DRAFT");
+    const myPublished = myArticles.filter(a => a.status === "PUBLISHED");
+    const pendingReviews = articles.filter(a => a.status === "PENDING");
 
-    // Quick Actions Permission gates
     const hasArticleCreate = role === "OWNER" || role === "ADMIN" || role === "SUPERVISOR" || role === "EMPLOYEE";
     const hasTickerCreate = role === "OWNER" || role === "ADMIN" || role === "SUPERVISOR" || role === "EMPLOYEE";
     const hasSponsorManage = role === "OWNER" || role === "ADMIN" || role === "SUPERVISOR";
@@ -540,7 +608,6 @@ export default function AdminDashboardPage() {
     const EmployeeWidget = (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          {/* Stats Bar */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-4 text-center">
               <span className="text-[9px] font-extrabold uppercase tracking-widest text-neutral-400 dark:text-neutral-500">My Drafts</span>
@@ -552,11 +619,10 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          {/* Drafts board */}
           <div className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-5">
             <h4 className="text-[10px] font-extrabold uppercase tracking-widest text-brand-red mb-3">My Draft Publications</h4>
             {myDrafts.length === 0 ? (
-              <p className="text-xs text-neutral-450 italic py-4">No active draft publications found.</p>
+              <p className="text-xs text-neutral-455 italic py-4">No active draft publications found.</p>
             ) : (
               <div className="divide-y divide-neutral-100 dark:divide-neutral-850 font-medium">
                 {myDrafts.map((art) => (
@@ -585,20 +651,19 @@ export default function AdminDashboardPage() {
     const SupervisorWidget = (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          {/* Pending reviews list */}
           <div className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-5">
             <h4 className="text-[10px] font-extrabold uppercase tracking-widest text-brand-red mb-3">Pending Editorial Reviews</h4>
             {pendingReviews.length === 0 ? (
-              <p className="text-xs text-neutral-450 italic py-4">No publications awaiting approval.</p>
+              <p className="text-xs text-neutral-455 italic py-4">No publications awaiting approval.</p>
             ) : (
               <div className="divide-y divide-neutral-100 dark:divide-neutral-850 font-medium">
                 {pendingReviews.map((art) => (
                   <div key={art.id} className="py-3.5 flex justify-between items-center text-xs">
                     <div>
                       <div className="font-bold text-neutral-900 dark:text-neutral-200">{art.title}</div>
-                      <div className="text-[10px] text-neutral-450 mt-0.5">By {art.author}</div>
+                      <div className="text-[10px] text-neutral-455 mt-0.5">By {art.author} in {art.department}</div>
                     </div>
-                    <button onClick={() => { setActiveTab("articles"); }} className="text-[10px] uppercase font-bold text-brand-red hover:underline cursor-pointer">
+                    <button onClick={() => { setArticleSubFilter("PENDING"); setActiveTab("articles"); }} className="text-[10px] uppercase font-bold text-brand-red hover:underline cursor-pointer">
                       Review &rsaquo;
                     </button>
                   </div>
@@ -622,7 +687,6 @@ export default function AdminDashboardPage() {
     const AdminWidget = (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          {/* Users preview */}
           <div className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-5">
             <h4 className="text-[10px] font-extrabold uppercase tracking-widest text-brand-red mb-3">Users Directory Preview</h4>
             <div className="divide-y divide-neutral-100 dark:divide-neutral-850 font-medium">
@@ -630,13 +694,13 @@ export default function AdminDashboardPage() {
                 <div key={u.id} className="py-3 flex justify-between items-center text-xs">
                   <div>
                     <span className="font-bold text-neutral-900 dark:text-neutral-200">{u.fullName}</span>
-                    <span className="text-[10px] text-neutral-450 ml-1 font-mono">@{u.username}</span>
+                    <span className="text-[10px] text-neutral-455 ml-1 font-mono">@{u.username}</span>
                   </div>
                   <span className="text-[10px] font-bold uppercase text-brand-red">{u.role}</span>
                 </div>
               ))}
             </div>
-            <button onClick={() => setActiveTab("users")} className="text-[10px] uppercase font-bold text-neutral-450 hover:text-brand-red transition-colors block mt-4 text-center w-full">
+            <button onClick={() => setActiveTab("users")} className="text-[10px] uppercase font-bold text-neutral-455 hover:text-brand-red transition-colors block mt-4 text-center w-full">
               View All Directory Users &rsaquo;
             </button>
           </div>
@@ -665,7 +729,6 @@ export default function AdminDashboardPage() {
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
-            {/* Combined pending lists for Owner */}
             <div className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-5">
               <h4 className="text-[10px] font-extrabold uppercase tracking-widest text-brand-red mb-3">Owner Master Console</h4>
               <p className="text-xs text-neutral-455 leading-relaxed mb-4">
@@ -689,16 +752,15 @@ export default function AdminDashboardPage() {
 
   const renderTabContent = () => {
     if (loading) {
-      // Skeleton loader placeholder to prevent layout shifts
       return (
         <div className="space-y-6 animate-pulse">
           <div className="h-10 bg-neutral-200 dark:bg-neutral-850 rounded w-1/4"></div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-            <div className="h-24 bg-neutral-200 dark:bg-neutral-850 rounded"></div>
-            <div className="h-24 bg-neutral-200 dark:bg-neutral-850 rounded"></div>
-            <div className="h-24 bg-neutral-200 dark:bg-neutral-850 rounded"></div>
+            <div className="h-24 bg-neutral-200 dark:bg-neutral-855 rounded"></div>
+            <div className="h-24 bg-neutral-200 dark:bg-neutral-855 rounded"></div>
+            <div className="h-24 bg-neutral-200 dark:bg-neutral-855 rounded"></div>
           </div>
-          <div className="h-64 bg-neutral-200 dark:bg-neutral-850 rounded"></div>
+          <div className="h-64 bg-neutral-200 dark:bg-neutral-855 rounded"></div>
         </div>
       );
     }
@@ -708,73 +770,442 @@ export default function AdminDashboardPage() {
         return renderDashboardWidgets();
 
       case "articles":
-        return articles.length === 0 ? (
-          <div className="text-center py-16 border border-dashed border-neutral-200 dark:border-neutral-800 rounded text-neutral-400 text-xs uppercase font-bold tracking-widest">
-            Database contains no publications.
-            <div className="mt-4">
-              <Link href="/admin/dashboard/create" className="inline-flex items-center bg-brand-red hover:bg-brand-red-dark text-white text-xs font-bold uppercase tracking-wider py-2 px-4 rounded-sm transition-all">
-                Create your first article
-              </Link>
+        const hasSupervisorOrAbove = currentUser?.role === "OWNER" || currentUser?.role === "ADMIN" || currentUser?.role === "SUPERVISOR";
+        const hasAdminOrOwner = currentUser?.role === "OWNER" || currentUser?.role === "ADMIN";
+
+        return (
+          <div className="space-y-6">
+            {/* Filters Row */}
+            <div className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-4 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-5 gap-3.5">
+                <input
+                  type="text"
+                  placeholder="Search articles (title, author, category, status)..."
+                  value={articleSearchQuery}
+                  onChange={(e) => setArticleSearchQuery(e.target.value)}
+                  className="sm:col-span-2 bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-855 text-xs rounded-sm px-3 py-1.5 focus:outline-none focus:border-brand-red text-neutral-800 dark:text-neutral-200"
+                />
+                <input
+                  type="text"
+                  placeholder="Filter by author..."
+                  value={articleAuthorFilter}
+                  onChange={(e) => setArticleAuthorFilter(e.target.value)}
+                  className="bg-neutral-50 dark:bg-neutral-955 border border-neutral-200 dark:border-neutral-855 text-xs rounded-sm px-3 py-1.5 focus:outline-none focus:border-brand-red text-neutral-800 dark:text-neutral-200"
+                />
+                <select
+                  value={articleDeptFilter}
+                  onChange={(e) => setArticleDeptFilter(e.target.value)}
+                  className="bg-neutral-50 dark:bg-neutral-955 border border-neutral-200 dark:border-neutral-855 text-xs rounded-sm px-2 py-1.5 focus:outline-none text-neutral-800 dark:text-neutral-200 cursor-pointer"
+                >
+                  <option value="">All Departments</option>
+                  <option value="Publications">Publications</option>
+                  <option value="Marketing">Marketing</option>
+                  <option value="Research">Research</option>
+                </select>
+                <div className="flex space-x-2">
+                  <input
+                    type="date"
+                    value={articleDateStart}
+                    onChange={(e) => setArticleDateStart(e.target.value)}
+                    className="w-1/2 bg-neutral-50 dark:bg-neutral-955 border border-neutral-200 dark:border-neutral-855 text-xs rounded-sm px-1.5 py-1 focus:outline-none text-neutral-600 dark:text-neutral-300"
+                  />
+                  <input
+                    type="date"
+                    value={articleDateEnd}
+                    onChange={(e) => setArticleDateEnd(e.target.value)}
+                    className="w-1/2 bg-neutral-50 dark:bg-neutral-955 border border-neutral-200 dark:border-neutral-855 text-xs rounded-sm px-1.5 py-1 focus:outline-none text-neutral-600 dark:text-neutral-300"
+                  />
+                </div>
+              </div>
+
+              {/* Clear filters trigger */}
+              {(articleSearchQuery || articleAuthorFilter || articleDeptFilter || articleDateStart || articleDateEnd) && (
+                <button
+                  onClick={() => {
+                    setArticleSearchQuery("");
+                    setArticleAuthorFilter("");
+                    setArticleDeptFilter("");
+                    setArticleDateStart("");
+                    setArticleDateEnd("");
+                  }}
+                  className="text-[10px] font-bold uppercase text-brand-red hover:underline"
+                >
+                  &times; Clear Active Filters
+                </button>
+              )}
             </div>
-          </div>
-        ) : (
-          <div className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-neutral-100 dark:border-neutral-850 text-[10px] uppercase font-bold tracking-wider text-neutral-400 dark:text-neutral-500 bg-neutral-50 dark:bg-neutral-900/50">
-                    <th className="py-3 px-5">Category</th>
-                    <th className="py-3 px-5">Title</th>
-                    <th className="py-3 px-5">Author</th>
-                    <th className="py-3 px-5">Date</th>
-                    <th className="py-3 px-5 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-100 dark:divide-neutral-850 font-medium">
-                  {articles.map((art) => (
-                    <tr
-                      key={art.id}
-                      className="hover:bg-neutral-50/50 dark:hover:bg-neutral-900/20 transition-colors"
-                    >
-                      <td className="py-4 px-5 shrink-0 whitespace-nowrap">
-                        <span className={`text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 border rounded-sm ${getCategoryColor(art.category)}`}>
-                          {art.category.replace("-", " ")}
-                        </span>
-                        {art.isFeatured && (
-                          <span className="ml-1.5 bg-yellow-500/10 text-yellow-600 border border-yellow-500/25 text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-sm">
-                            ★ Featured
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-4 px-5 max-w-[280px] sm:max-w-md truncate text-neutral-900 dark:text-neutral-200 font-serif font-bold text-sm">
-                        {art.title}
-                      </td>
-                      <td className="py-4 px-5 text-neutral-500">{art.author}</td>
-                      <td className="py-4 px-5 font-mono text-neutral-500 whitespace-nowrap">
-                        {new Date(art.publishedAt).toLocaleDateString("en-US", {
-                          year: "numeric",
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </td>
-                      <td className="py-4 px-5 text-right space-x-3.5 whitespace-nowrap">
-                        {currentUser?.role !== "EMPLOYEE" && (
-                          <button
-                            onClick={() => handleDelete(art.id)}
-                            className="text-red-500 hover:text-red-700 font-bold transition-colors cursor-pointer"
-                          >
-                            {currentUser?.role === "SUPERVISOR" ? "Move to Trash" : "Delete"}
-                          </button>
-                        )}
-                        {currentUser?.role === "EMPLOYEE" && (
-                          <span className="text-[10px] text-neutral-450 italic font-bold">No Actions</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+
+            {/* Horizontal Sub-Navigation status Tabs */}
+            <div className="flex border-b border-neutral-200 dark:border-neutral-800 overflow-x-auto whitespace-nowrap">
+              {(["DRAFT", "PENDING", "PUBLISHED", "SCHEDULED", "ARCHIVED", "TRASH"] as const).map((status) => {
+                const count = articles.filter(a => a.status === status).length;
+                const labels = {
+                  DRAFT: "Drafts",
+                  PENDING: "Pending Review",
+                  PUBLISHED: "Published",
+                  SCHEDULED: "Scheduled",
+                  ARCHIVED: "Archived",
+                  TRASH: "Trash",
+                };
+                return (
+                  <button
+                    key={status}
+                    onClick={() => {
+                      setArticleSubFilter(status);
+                      setExpandedArticleId(null);
+                    }}
+                    className={`py-3 px-5 text-xs uppercase font-bold tracking-wider border-b-2 transition-all cursor-pointer ${
+                      articleSubFilter === status
+                        ? "border-brand-red text-brand-red font-extrabold"
+                        : "border-transparent text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
+                    }`}
+                  >
+                    {labels[status]} ({count})
+                  </button>
+                );
+              })}
             </div>
+
+            {/* List Table */}
+            {filteredArticles.length === 0 ? (
+              <div className="text-center py-16 border border-dashed border-neutral-200 dark:border-neutral-800 rounded text-neutral-400 text-xs uppercase font-bold tracking-widest bg-white dark:bg-brand-dark-card transition-colors">
+                No publications found under this status.
+                {articleSubFilter === "DRAFT" && (
+                  <div className="mt-4">
+                    <Link href="/admin/dashboard/create" className="inline-flex items-center bg-brand-red hover:bg-brand-red-dark text-white text-xs font-bold uppercase tracking-wider py-2 px-4 rounded-sm transition-all">
+                      Create your first draft
+                    </Link>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded overflow-hidden shadow-sm transition-colors">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-neutral-100 dark:border-neutral-850 text-[10px] uppercase font-bold tracking-wider text-neutral-400 dark:text-neutral-500 bg-neutral-50 dark:bg-neutral-900/50">
+                        <th className="py-3 px-5">Category</th>
+                        <th className="py-3 px-5">Title</th>
+                        <th className="py-3 px-5">Author</th>
+                        <th className="py-3 px-5">Department</th>
+                        <th className="py-3 px-5">Date</th>
+                        <th className="py-3 px-5 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-100 dark:divide-neutral-850 font-medium">
+                      {filteredArticles.map((art) => {
+                        const isExpanded = expandedArticleId === art.id;
+                        const isOwnArticle = art.author === currentUser?.username;
+                        const isSameDept = currentUser?.departments?.includes(art.department);
+
+                        return (
+                          <React.Fragment key={art.id}>
+                            <tr
+                              className={`hover:bg-neutral-50/50 dark:hover:bg-neutral-900/20 transition-colors align-middle cursor-pointer ${
+                                isExpanded ? "bg-neutral-50/30 dark:bg-neutral-900/10" : ""
+                              }`}
+                              onClick={() => setExpandedArticleId(isExpanded ? null : art.id)}
+                            >
+                              <td className="py-4 px-5 shrink-0 whitespace-nowrap">
+                                <span className={`text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 border rounded-sm ${getCategoryColor(art.category)}`}>
+                                  {art.category.replace("-", " ")}
+                                </span>
+                              </td>
+                              <td className="py-4 px-5 max-w-[280px] sm:max-w-md truncate text-neutral-900 dark:text-neutral-200 font-serif font-bold text-sm">
+                                <div className="flex items-center space-x-2">
+                                  <span>{art.title}</span>
+                                  {art.status === "DRAFT" && art.revisionComment && (
+                                    <span className="bg-rose-500/10 text-rose-500 border border-rose-500/20 text-[9px] font-extrabold uppercase tracking-widest px-1.5 py-0.5 rounded-sm">
+                                      Needs Revision
+                                    </span>
+                                  )}
+                                  {art.isFeatured && (
+                                    <span className="bg-yellow-500/10 text-yellow-600 border border-yellow-500/25 text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-sm">
+                                      ★ Featured
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-4 px-5 text-neutral-500">{art.author}</td>
+                              <td className="py-4 px-5 text-neutral-455 font-bold uppercase text-[10px] tracking-wider">{art.department}</td>
+                              <td className="py-4 px-5 font-mono text-neutral-500 whitespace-nowrap">
+                                {new Date(art.publishedAt).toLocaleDateString()}
+                              </td>
+                              <td className="py-4 px-5 text-right space-x-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                {/* Action workflow buttons */}
+
+                                {/* Employee Gating */}
+                                {currentUser?.role === "EMPLOYEE" && (
+                                  <>
+                                    {art.status === "DRAFT" && isOwnArticle && (
+                                      <>
+                                        <Link href={`/admin/dashboard/users/create`} className="hidden" /> {/* link check */}
+                                        <button
+                                          onClick={() => handleUpdateStatus(art.id, "PENDING")}
+                                          className="text-emerald-500 hover:text-emerald-700 font-bold transition-colors cursor-pointer"
+                                        >
+                                          Submit for Review
+                                        </button>
+                                        <button
+                                          onClick={() => handleDelete(art.id)}
+                                          className="text-red-500 hover:text-red-700 font-bold transition-colors cursor-pointer"
+                                        >
+                                          Delete
+                                        </button>
+                                      </>
+                                    )}
+                                    {art.status !== "DRAFT" && (
+                                      <span className="text-[10px] text-neutral-450 italic font-bold">Read-Only</span>
+                                    )}
+                                  </>
+                                )}
+
+                                {/* Supervisor Actions */}
+                                {currentUser?.role === "SUPERVISOR" && (
+                                  <>
+                                    {art.status === "PENDING" && isSameDept && (
+                                      <>
+                                        <button
+                                          onClick={() => handleUpdateStatus(art.id, "PUBLISHED")}
+                                          className="text-emerald-500 hover:text-emerald-700 font-bold transition-colors cursor-pointer"
+                                        >
+                                          Approve &amp; Publish
+                                        </button>
+                                        <button
+                                          onClick={() => setActiveScheduleArticleId(art.id)}
+                                          className="text-blue-500 hover:text-blue-700 font-bold transition-colors cursor-pointer"
+                                        >
+                                          Schedule
+                                        </button>
+                                        <button
+                                          onClick={() => setActiveRevisionArticleId(art.id)}
+                                          className="text-amber-500 hover:text-amber-700 font-bold transition-colors cursor-pointer"
+                                        >
+                                          Return
+                                        </button>
+                                        <button
+                                          onClick={() => handleDelete(art.id)}
+                                          className="text-red-500 hover:text-red-700 font-bold transition-colors cursor-pointer"
+                                        >
+                                          Trash
+                                        </button>
+                                      </>
+                                    )}
+
+                                    {art.status === "PUBLISHED" && isSameDept && (
+                                      <>
+                                        <button
+                                          onClick={() => handleUpdateStatus(art.id, "ARCHIVED")}
+                                          className="text-neutral-505 hover:text-neutral-700 font-bold transition-colors cursor-pointer"
+                                        >
+                                          Archive
+                                        </button>
+                                        <button
+                                          onClick={() => handleDelete(art.id)}
+                                          className="text-red-500 hover:text-red-700 font-bold transition-colors cursor-pointer"
+                                        >
+                                          Trash
+                                        </button>
+                                      </>
+                                    )}
+
+                                    {art.status === "SCHEDULED" && isSameDept && (
+                                      <>
+                                        <button
+                                          onClick={() => handleUpdateStatus(art.id, "DRAFT")}
+                                          className="text-neutral-505 hover:text-neutral-700 font-bold transition-colors cursor-pointer"
+                                        >
+                                          Cancel Schedule
+                                        </button>
+                                        <button
+                                          onClick={() => handleDelete(art.id)}
+                                          className="text-red-500 hover:text-red-700 font-bold transition-colors cursor-pointer"
+                                        >
+                                          Trash
+                                        </button>
+                                      </>
+                                    )}
+
+                                    {art.status === "DRAFT" && isSameDept && (
+                                      <>
+                                        <button
+                                          onClick={() => handleUpdateStatus(art.id, "PENDING")}
+                                          className="text-emerald-500 hover:text-emerald-700 font-bold transition-colors cursor-pointer"
+                                        >
+                                          Submit
+                                        </button>
+                                        <button
+                                          onClick={() => handleDelete(art.id)}
+                                          className="text-red-500 hover:text-red-700 font-bold transition-colors cursor-pointer"
+                                        >
+                                          Trash
+                                        </button>
+                                      </>
+                                    )}
+
+                                    {art.status === "TRASH" && (
+                                      <span className="text-[10px] text-neutral-400 italic">No Actions</span>
+                                    )}
+                                  </>
+                                )}
+
+                                {/* Admin / Owner Actions */}
+                                {hasAdminOrOwner && (
+                                  <>
+                                    {art.status === "TRASH" ? (
+                                      <>
+                                        <button
+                                          onClick={() => handleRestoreTrash(art.id)}
+                                          className="text-emerald-500 hover:text-emerald-700 font-bold transition-colors cursor-pointer"
+                                        >
+                                          Restore
+                                        </button>
+                                        <button
+                                          onClick={() => handleDelete(art.id)}
+                                          className="text-red-500 hover:text-red-700 font-bold transition-colors cursor-pointer"
+                                        >
+                                          Delete Permanently
+                                        </button>
+                                      </>
+                                    ) : (
+                                      <>
+                                        {art.status === "PENDING" && (
+                                          <button
+                                            onClick={() => handleUpdateStatus(art.id, "PUBLISHED")}
+                                            className="text-emerald-500 hover:text-emerald-700 font-bold transition-colors cursor-pointer"
+                                          >
+                                            Publish
+                                          </button>
+                                        )}
+                                        {art.status === "PUBLISHED" && (
+                                          <button
+                                            onClick={() => handleUpdateStatus(art.id, "ARCHIVED")}
+                                            className="text-neutral-505 hover:text-neutral-700 font-bold transition-colors cursor-pointer"
+                                          >
+                                            Archive
+                                          </button>
+                                        )}
+                                        {art.status === "ARCHIVED" && (
+                                          <button
+                                            onClick={() => handleUpdateStatus(art.id, "DRAFT")}
+                                            className="text-emerald-505 hover:text-emerald-700 font-bold transition-colors cursor-pointer"
+                                          >
+                                            Restore to Draft
+                                          </button>
+                                        )}
+                                        <button
+                                          onClick={() => handleDelete(art.id)}
+                                          className="text-red-500 hover:text-red-700 font-bold transition-colors cursor-pointer"
+                                        >
+                                          Trash
+                                        </button>
+                                      </>
+                                    )}
+                                  </>
+                                )}
+                              </td>
+                            </tr>
+
+                            {/* Expandable Article Metadata Panel */}
+                            {isExpanded && (
+                              <tr>
+                                <td colSpan={6} className="bg-neutral-50/50 dark:bg-neutral-900/30 p-5 border-t border-b border-neutral-100 dark:border-neutral-850">
+                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs text-neutral-600 dark:text-neutral-400">
+                                    <div className="space-y-1.5">
+                                      <span className="text-[10px] font-extrabold uppercase tracking-widest text-brand-red block">Article Metadata Info</span>
+                                      <div><span className="font-bold text-neutral-800 dark:text-neutral-200">Author:</span> {art.author}</div>
+                                      <div><span className="font-bold text-neutral-800 dark:text-neutral-200">Department:</span> {art.department}</div>
+                                      <div><span className="font-bold text-neutral-800 dark:text-neutral-200">Current Status:</span> {art.status}</div>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                      <span className="text-[10px] font-extrabold uppercase tracking-widest text-brand-red block">Publication Logs</span>
+                                      <div><span className="font-bold text-neutral-800 dark:text-neutral-200">Published By:</span> {art.publishedBy || "Not published"}</div>
+                                      <div><span className="font-bold text-neutral-800 dark:text-neutral-200">Published At:</span> {art.publishedAt ? new Date(art.publishedAt).toLocaleString() : "N/A"}</div>
+                                      {art.status === "SCHEDULED" && (
+                                        <div><span className="font-bold text-neutral-800 dark:text-neutral-200">Scheduled At:</span> {art.scheduledAt ? new Date(art.scheduledAt).toLocaleString() : "N/A"}</div>
+                                      )}
+                                    </div>
+                                    <div className="space-y-1.5">
+                                      <span className="text-[10px] font-extrabold uppercase tracking-widest text-brand-red block">Activity Tracking</span>
+                                      <div><span className="font-bold text-neutral-800 dark:text-neutral-200">Created:</span> {new Date(art.publishedAt).toLocaleDateString()}</div>
+                                      <div><span className="font-bold text-neutral-800 dark:text-neutral-200">Last Modified:</span> {new Date(art.updatedAt).toLocaleString()}</div>
+                                      <div><span className="font-bold text-neutral-800 dark:text-neutral-200">Last Edited By:</span> {art.editedBy || "N/A"}</div>
+                                    </div>
+                                  </div>
+
+                                  {/* Return for Revision Modal Panel */}
+                                  {activeRevisionArticleId === art.id && (
+                                    <div className="mt-4 p-4 border border-amber-500/30 bg-amber-500/5 rounded space-y-3">
+                                      <span className="text-[10px] font-extrabold uppercase tracking-widest text-amber-500 block">Revision Comment Request Form</span>
+                                      <textarea
+                                        placeholder="Add revision feedback instructions for employee..."
+                                        value={revisionCommentInput}
+                                        onChange={(e) => setRevisionCommentInput(e.target.value)}
+                                        className="w-full text-xs p-2 bg-white dark:bg-neutral-950 border border-neutral-250 dark:border-neutral-850 rounded focus:outline-none"
+                                        rows={3}
+                                      />
+                                      <div className="flex justify-end space-x-2">
+                                        <button
+                                          onClick={() => setActiveRevisionArticleId(null)}
+                                          className="px-3 py-1 bg-neutral-200 text-neutral-700 font-bold rounded-sm cursor-pointer"
+                                        >
+                                          Cancel
+                                        </button>
+                                        <button
+                                          onClick={() => handleUpdateStatus(art.id, "DRAFT", { revisionComment: revisionCommentInput })}
+                                          className="px-3 py-1 bg-amber-500 text-white font-bold rounded-sm cursor-pointer"
+                                        >
+                                          Return Draft
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Schedule Date Modal Panel */}
+                                  {activeScheduleArticleId === art.id && (
+                                    <div className="mt-4 p-4 border border-blue-500/30 bg-blue-500/5 rounded space-y-3">
+                                      <span className="text-[10px] font-extrabold uppercase tracking-widest text-blue-500 block">Schedule Publication Date</span>
+                                      <input
+                                        type="datetime-local"
+                                        value={scheduleDateInput}
+                                        onChange={(e) => setScheduleDateInput(e.target.value)}
+                                        className="w-full text-xs p-2 bg-white dark:bg-neutral-955 border border-neutral-250 dark:border-neutral-855 rounded focus:outline-none text-neutral-800 dark:text-neutral-200"
+                                      />
+                                      <div className="flex justify-end space-x-2">
+                                        <button
+                                          onClick={() => setActiveScheduleArticleId(null)}
+                                          className="px-3 py-1 bg-neutral-200 text-neutral-700 font-bold rounded-sm cursor-pointer"
+                                        >
+                                          Cancel
+                                        </button>
+                                        <button
+                                          onClick={() => handleUpdateStatus(art.id, "SCHEDULED", { scheduledAt: new Date(scheduleDateInput).toISOString() })}
+                                          className="px-3 py-1 bg-blue-500 text-white font-bold rounded-sm cursor-pointer"
+                                        >
+                                          Schedule Publication
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Display active revision feedback if present */}
+                                  {art.status === "DRAFT" && art.revisionComment && (
+                                    <div className="mt-4 p-3.5 bg-rose-500/5 border border-rose-500/20 text-rose-500 rounded text-xs">
+                                      <div className="font-extrabold uppercase tracking-wider text-[10px] mb-1">Supervisor feedback (Needs Revision):</div>
+                                      <div className="font-semibold">{art.revisionComment}</div>
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         );
 
@@ -847,7 +1278,7 @@ export default function AdminDashboardPage() {
               <h3 className="font-serif font-bold text-base text-brand-dark dark:text-white mb-1.5">
                 Breaking News Ticker Settings
               </h3>
-              <p className="text-xs text-neutral-400 leading-normal">
+              <p className="text-xs text-neutral-405 leading-normal">
                 Choose between streaming real-time financial headlines automatically for free, or locking your own custom breaking alerts on the screen.
               </p>
             </div>
@@ -1079,7 +1510,6 @@ export default function AdminDashboardPage() {
       case "users":
         return (
           <div className="space-y-6">
-            {/* Users Search, Sorting, and Filters Row */}
             <div className="bg-neutral-50 dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-4 flex flex-col md:flex-row md:items-center gap-4 transition-colors">
               <form onSubmit={handleUsersSearchSubmit} className="flex-grow flex items-center space-x-2">
                 <input
@@ -1098,14 +1528,13 @@ export default function AdminDashboardPage() {
               </form>
 
               <div className="flex flex-wrap items-center gap-3">
-                {/* Filter by Role */}
                 <select
                   value={usersRoleFilter}
                   onChange={(e) => {
                     setUsersPage(1);
                     setUsersRoleFilter(e.target.value);
                   }}
-                  className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-850 rounded px-2.5 py-1.5 text-xs text-brand-dark dark:text-neutral-200 font-semibold focus:outline-none cursor-pointer"
+                  className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-855 rounded px-2.5 py-1.5 text-xs text-brand-dark dark:text-neutral-200 font-semibold focus:outline-none cursor-pointer"
                 >
                   <option value="">All Roles</option>
                   <option value="OWNER">Owner</option>
@@ -1114,14 +1543,13 @@ export default function AdminDashboardPage() {
                   <option value="EMPLOYEE">Employee</option>
                 </select>
 
-                {/* Filter by Status */}
                 <select
                   value={usersStatusFilter}
                   onChange={(e) => {
                     setUsersPage(1);
                     setUsersStatusFilter(e.target.value);
                   }}
-                  className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-850 rounded px-2.5 py-1.5 text-xs text-brand-dark dark:text-neutral-200 font-semibold focus:outline-none cursor-pointer"
+                  className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-855 rounded px-2.5 py-1.5 text-xs text-brand-dark dark:text-neutral-200 font-semibold focus:outline-none cursor-pointer"
                 >
                   <option value="">All Statuses</option>
                   <option value="ACTIVE">Active</option>
@@ -1129,7 +1557,6 @@ export default function AdminDashboardPage() {
                   <option value="SUSPENDED">Suspended</option>
                 </select>
 
-                {/* Filter by Archive Status */}
                 <label className="flex items-center space-x-1.5 text-xs font-bold text-neutral-600 dark:text-neutral-300 cursor-pointer select-none">
                   <input
                     type="checkbox"
@@ -1143,7 +1570,6 @@ export default function AdminDashboardPage() {
                   <span>Show Archived</span>
                 </label>
 
-                {/* Sort Controls */}
                 <select
                   value={`${usersSort}-${usersOrder}`}
                   onChange={(e) => {
@@ -1151,7 +1577,7 @@ export default function AdminDashboardPage() {
                     setUsersSort(sort);
                     setUsersOrder(order as "asc" | "desc");
                   }}
-                  className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-850 rounded px-2.5 py-1.5 text-xs text-brand-dark dark:text-neutral-200 font-semibold focus:outline-none cursor-pointer"
+                  className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-855 rounded px-2.5 py-1.5 text-xs text-brand-dark dark:text-neutral-200 font-semibold focus:outline-none cursor-pointer"
                 >
                   <option value="fullName-asc">Sort: Name A-Z</option>
                   <option value="fullName-desc">Sort: Name Z-A</option>
@@ -1161,7 +1587,6 @@ export default function AdminDashboardPage() {
               </div>
             </div>
 
-            {/* Users Grid Table */}
             {users.length === 0 ? (
               <div className="text-center py-12 border border-dashed border-neutral-200 dark:border-neutral-800 rounded text-neutral-400 text-xs uppercase font-bold tracking-widest">
                 No users found matching your filter criteria.
@@ -1181,7 +1606,7 @@ export default function AdminDashboardPage() {
                         <th className="py-3 px-5 text-right">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-neutral-100 dark:divide-neutral-850 font-medium">
+                    <tbody className="divide-y divide-neutral-100 dark:divide-neutral-855 font-medium">
                       {users.map((u) => (
                         <tr
                           key={u.id}
@@ -1271,7 +1696,6 @@ export default function AdminDashboardPage() {
                   </table>
                 </div>
 
-                {/* Pagination Footer */}
                 {usersTotal > 10 && (
                   <div className="bg-neutral-50 dark:bg-neutral-900/50 px-5 py-3 border-t border-neutral-100 dark:border-neutral-850 flex items-center justify-between">
                     <span className="text-neutral-500 text-xs">
@@ -1364,7 +1788,7 @@ export default function AdminDashboardPage() {
             </button>
           </div>
 
-          {/* Workspace Dropdown Selector (if user has > 1 workspaces) */}
+          {/* Workspace Dropdown Selector */}
           {showWorkspaceDropdown && currentUser && (
             <div className="px-6 py-4 border-b border-neutral-100 dark:border-neutral-850">
               <label className="text-[9px] font-extrabold uppercase tracking-widest text-neutral-400 dark:text-neutral-500 block mb-1">Active Workspace</label>
@@ -1374,7 +1798,7 @@ export default function AdminDashboardPage() {
                 className="w-full bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 text-xs font-bold py-1.5 px-2.5 rounded text-brand-dark dark:text-neutral-200 focus:outline-none cursor-pointer"
               >
                 {allowedWorkspaces.map((ws: string) => (
-                  <option key={ws} value={ws} className="bg-white dark:bg-neutral-955 text-neutral-200">
+                  <option key={ws} value={ws} className="bg-white dark:bg-neutral-955 text-neutral-205">
                     {ws} Workspace
                   </option>
                 ))}
@@ -1434,7 +1858,7 @@ export default function AdminDashboardPage() {
 
       {/* Profile menu floating panel */}
       {showProfileMenu && currentUser && (
-        <div className="fixed bottom-16 left-4 z-50 w-56 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded shadow-lg p-2 animate-fadeIn text-xs font-semibold">
+        <div className="fixed bottom-16 left-4 z-50 w-56 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded shadow-lg p-2 animate-fadeIn text-xs font-semibold animate-fadeInFast">
           <div className="px-3 py-2 border-b border-neutral-100 dark:border-neutral-850">
             <span className="text-[9px] uppercase font-extrabold text-neutral-400 block">Workspace</span>
             <span className="text-brand-dark dark:text-neutral-200 font-bold">{activeWorkspace} Workspace</span>
@@ -1442,7 +1866,7 @@ export default function AdminDashboardPage() {
           <Link href="/admin/dashboard/profile" className="block px-3 py-2 hover:bg-neutral-50 dark:hover:bg-neutral-855 rounded text-neutral-700 dark:text-neutral-300">
             My Profile
           </Link>
-          <Link href="/admin/dashboard/profile" className="block px-3 py-2 hover:bg-neutral-50 dark:hover:bg-neutral-855 rounded text-neutral-700 dark:text-neutral-300 border-b border-neutral-100 dark:border-neutral-850">
+          <Link href="/admin/dashboard/profile" className="block px-3 py-2 hover:bg-neutral-50 dark:hover:bg-neutral-855 rounded text-neutral-700 dark:text-neutral-300 border-b border-neutral-100 dark:border-neutral-855">
             Account Settings
           </Link>
           <button onClick={handleLogout} className="w-full text-left px-3 py-2 hover:bg-neutral-50 dark:hover:bg-neutral-855 rounded text-red-500 font-bold cursor-pointer">
@@ -1462,7 +1886,7 @@ export default function AdminDashboardPage() {
         {/* Top Navbar */}
         <header className="h-16 border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 flex items-center justify-between px-6 transition-colors duration-300">
           <div className="flex items-center space-x-3">
-            <button onClick={() => setShowMobileSidebar(true)} className="md:hidden text-neutral-450 hover:text-neutral-800 cursor-pointer">
+            <button onClick={() => setShowMobileSidebar(true)} className="md:hidden text-neutral-455 hover:text-neutral-800 cursor-pointer">
               <svg className="w-6 h-6 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
                 <line x1="3" y1="12" x2="21" y2="12"></line>
                 <line x1="3" y1="6" x2="21" y2="6"></line>
@@ -1502,7 +1926,7 @@ export default function AdminDashboardPage() {
                         <span className="font-bold text-neutral-800 dark:text-neutral-200 text-xs">{res.title}</span>
                         <span className="text-[8px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded bg-brand-red/10 text-brand-red border border-brand-red/15">{res.type}</span>
                       </div>
-                      <span className="text-[10px] text-neutral-450 mt-0.5 truncate">{res.sub}</span>
+                      <span className="text-[10px] text-neutral-455 mt-0.5 truncate">{res.sub}</span>
                     </button>
                   ))}
                 </div>

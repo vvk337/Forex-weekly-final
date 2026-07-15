@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
-import { validatePermissions } from "@/lib/auth-helpers";
+import { validatePermissions, getSession } from "@/lib/auth-helpers";
 import { mockArticles } from "@/data/mockData";
 
 // Seed articles dynamically if DB is empty
@@ -21,6 +21,8 @@ async function ensureArticlesSeeded() {
       author: art.author,
       imageUrl: art.imageUrl,
       isFeatured: art.isFeatured || false,
+      status: "PUBLISHED",
+      department: "Publications",
     }));
 
     await prisma.article.createMany({ data });
@@ -32,20 +34,104 @@ export async function GET(request: Request) {
   try {
     await ensureArticlesSeeded();
 
+    // Auto-publish scheduled articles that are past due
+    await prisma.article.updateMany({
+      where: {
+        status: "SCHEDULED",
+        scheduledAt: { lte: new Date() },
+      },
+      data: {
+        status: "PUBLISHED",
+        publishedAt: new Date(),
+      },
+    });
+
     const { searchParams } = new URL(request.url);
     const category = searchParams.get("category");
     const isFeatured = searchParams.get("isFeatured");
+    const status = searchParams.get("status");
+    const author = searchParams.get("author");
+    const department = searchParams.get("department");
+    const search = searchParams.get("search");
+    const dateStart = searchParams.get("dateStart");
+    const dateEnd = searchParams.get("dateEnd");
 
-    // Filter out trashed articles by default
-    const where: any = {
-      category: { not: "trash" },
-    };
-    
+    const session = await getSession(request);
+
+    // Build query filters
+    const where: any = {};
+
+    // Filter by Category
     if (category) {
       where.category = category;
     }
+
+    // Filter by Featured Status
     if (isFeatured !== null && isFeatured !== undefined) {
       where.isFeatured = isFeatured === "true";
+    }
+
+    // Filter by Author
+    if (author) {
+      where.author = { contains: author };
+    }
+
+    // Filter by Department
+    if (department) {
+      where.department = department;
+    }
+
+    // Filter by Date Range
+    if (dateStart || dateEnd) {
+      where.publishedAt = {};
+      if (dateStart) where.publishedAt.gte = new Date(dateStart);
+      if (dateEnd) where.publishedAt.lte = new Date(dateEnd);
+    }
+
+    // Filter by Search Query
+    if (search) {
+      const searchLower = search.toLowerCase();
+      where.OR = [
+        { title: { contains: search } },
+        { author: { contains: search } },
+        { category: { contains: search } },
+        { status: { contains: search } },
+      ];
+    }
+
+    // Role-based Status Filters
+    if (status) {
+      where.status = status;
+    } else {
+      // Default behavior
+      if (!session) {
+        // Public website sees only PUBLISHED articles
+        where.status = "PUBLISHED";
+      } else {
+        // Logged-in backend users:
+        if (session.role === "EMPLOYEE") {
+          // Employee sees published articles + their own drafts/pending
+          where.OR = [
+            { status: "PUBLISHED" },
+            { author: session.username },
+          ];
+        } else if (session.role === "SUPERVISOR") {
+          // Supervisor sees all published + all department articles
+          // Fetch supervisor departments
+          const dbUser = await prisma.user.findUnique({
+            where: { id: session.userId },
+            include: { departments: true },
+          });
+          const depts = dbUser?.departments.map(d => d.name) || [];
+          where.OR = [
+            { status: "PUBLISHED" },
+            { department: { in: depts } },
+          ];
+        } else {
+          // Admin / Owner sees everything except Trash (unless explicitly looking for it)
+          where.status = { not: "TRASH" };
+        }
+      }
     }
 
     const articles = await prisma.article.findMany({
@@ -64,7 +150,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const { authorized, session } = await validatePermissions(request, "articles:create");
-    if (!authorized) {
+    if (!authorized || !session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -78,7 +164,14 @@ export async function POST(request: Request) {
       );
     }
 
-    // If setting to featured, unfeature all other articles in same category (optional, but nice)
+    // Resolve author department
+    const dbUser = await prisma.user.findUnique({
+      where: { id: session.userId },
+      include: { departments: true },
+    });
+    const userDept = dbUser?.departments[0]?.name || "Publications";
+
+    // If setting to featured, unfeature all other articles
     if (isFeatured) {
       await prisma.article.updateMany({
         where: { isFeatured: true },
@@ -96,6 +189,8 @@ export async function POST(request: Request) {
         imageUrl: imageUrl || "/images/placeholder.jpg",
         isFeatured: isFeatured || false,
         publishedAt: new Date(),
+        status: "DRAFT",
+        department: userDept,
       },
     });
 

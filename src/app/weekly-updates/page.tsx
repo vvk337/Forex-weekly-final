@@ -6,7 +6,7 @@ import ArticleCard from "@/components/ui/ArticleCard";
 async function getWeeklyArticles() {
   try {
     const dbArticles = await prisma.article.findMany({
-      where: { category: "weekly-updates" },
+      where: { category: "weekly-updates", status: "PUBLISHED" },
       orderBy: { publishedAt: "desc" },
     });
 

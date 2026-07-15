@@ -45,7 +45,7 @@ export default async function ArticleDetailPage({ params }: ArticleDetailPagePro
       where: { id },
     });
 
-    if (dbArticle && dbArticle.category === category) {
+    if (dbArticle && dbArticle.category === category && dbArticle.status === "PUBLISHED") {
       article = {
         id: dbArticle.id,
         title: dbArticle.title,
@@ -63,6 +63,7 @@ export default async function ArticleDetailPage({ params }: ArticleDetailPagePro
       const dbRelated = await prisma.article.findMany({
         where: {
           category,
+          status: "PUBLISHED",
           NOT: { id }
         },
         take: 2,

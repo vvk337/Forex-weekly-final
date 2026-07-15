@@ -18,16 +18,22 @@ model Admin {
 }
 
 model Article {
-  id          String   @id @default(uuid())
-  title       String
-  excerpt     String
-  content     String
-  category    String   // 'weekly-updates', 'daily-feed', 'global-events', 'forex', 'learn-forex'
-  publishedAt DateTime @default(now())
-  author      String
-  imageUrl    String
-  isFeatured  Boolean  @default(false)
-  updatedAt   DateTime @updatedAt
+  id              String    @id @default(uuid())
+  title           String
+  excerpt         String
+  content         String
+  category        String   // 'weekly-updates', 'daily-feed', 'global-events', 'forex', 'learn-forex'
+  publishedAt     DateTime  @default(now())
+  author          String
+  imageUrl        String
+  isFeatured      Boolean   @default(false)
+  updatedAt       DateTime  @updatedAt
+  status          String    @default("DRAFT") // "DRAFT", "PENDING", "PUBLISHED", "SCHEDULED", "ARCHIVED", "TRASH"
+  scheduledAt     DateTime?
+  publishedBy     String?
+  editedBy        String?
+  revisionComment String?
+  department      String    @default("Publications")
 }
 
 model Sponsor {
