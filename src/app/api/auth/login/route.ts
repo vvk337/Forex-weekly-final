@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import prisma from "@/lib/db";
 import { signJWT } from "@/lib/auth";
+import { ensureDbSeeded } from "@/lib/db-seed";
 
 export async function POST(request: Request) {
   try {
@@ -14,23 +15,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // Auto-seed default OWNER in User table if empty (Self-healing mechanism)
-    const userCount = await prisma.user.count();
-    if (userCount === 0) {
-      const hashedPassword = await bcrypt.hash("admin123", 10);
-      await prisma.user.create({
-        data: {
-          fullName: "System Owner",
-          username: "admin",
-          email: "owner@forexweekly.com",
-          password: hashedPassword,
-          role: "OWNER",
-          status: "ACTIVE",
-          departments: JSON.stringify(["Editorial"]),
-          workspaces: JSON.stringify(["Publication"]),
-        },
-      });
-    }
+    // Call DB seeder to make sure default Roles, Departments, Workspaces, and OWNER exist
+    await ensureDbSeeded();
 
     // Auto-seed legacy Admin table for database backward compatibility
     const adminCount = await prisma.admin.count();
@@ -44,9 +30,13 @@ export async function POST(request: Request) {
       });
     }
 
-    // Lookup user in DB User table first
+    // Lookup user in DB User table first, including role and workspaces relation
     const dbUser = await prisma.user.findUnique({
       where: { username },
+      include: {
+        role: true,
+        workspaces: true,
+      },
     });
 
     let targetUserPassword = "";
@@ -96,8 +86,14 @@ export async function POST(request: Request) {
       });
     }
 
-    // Generate JWT
-    const token = await signJWT({ username });
+    // Generate JWT payload with ID, username, and Role name
+    const payload = {
+      id: dbUser ? dbUser.id : "admin-legacy",
+      username,
+      role: dbUser?.role?.name || "OWNER",
+      workspaceId: dbUser?.workspaces?.[0]?.name || "Publication",
+    };
+    const token = await signJWT(payload);
 
     // Set cookie response
     const response = NextResponse.json(

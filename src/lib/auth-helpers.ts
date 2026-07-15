@@ -1,18 +1,18 @@
+import prisma from "./db";
 import { verifyJWT } from "@/lib/auth";
 
-// Future User Roles definition
-export type UserRole = "ADMIN" | "EDITOR" | "SUPPORT" | "VIEWER";
+export type UserRole = "OWNER" | "ADMIN" | "SUPERVISOR" | "EMPLOYEE";
 
-// Future User Session structure
 export interface UserSession {
   userId: string;
   username: string;
   role: UserRole;
-  workspaceId?: string; // Future multi-tenant workspace context
+  workspaceId?: string; // Current selected/active workspace context
+  impersonatedBy?: string; // Holds Owner's ID if impersonating
 }
 
 /**
- * Extracts and decodes the JWT token payload from request headers
+ * Decodes the JWT token from request cookies to retrieve session details
  */
 export async function getSession(request: Request): Promise<UserSession | null> {
   const token = request.headers.get("cookie")
@@ -26,12 +26,12 @@ export async function getSession(request: Request): Promise<UserSession | null> 
     const decoded = await verifyJWT(token) as any;
     if (!decoded) return null;
 
-    // Map JWT payload to session claims (supporting future RBAC claims defaults)
     return {
-      userId: (decoded.id as string) || "admin-id",
-      username: (decoded.username as string) || "admin",
-      role: (decoded.role as UserRole) || "ADMIN", // Default current sessions to ADMIN
-      workspaceId: (decoded.workspaceId as string) || undefined,
+      userId: decoded.id || "admin-legacy",
+      username: decoded.username || "admin",
+      role: (decoded.role as UserRole) || "EMPLOYEE",
+      workspaceId: decoded.workspaceId || undefined,
+      impersonatedBy: decoded.impersonatedBy || undefined,
     };
   } catch (err) {
     console.error("Session verification error:", err);
@@ -40,28 +40,116 @@ export async function getSession(request: Request): Promise<UserSession | null> 
 }
 
 /**
- * Centralized authorization validator.
- * Validates permissions/roles for requests before operations are executed.
+ * Validates role-based permission access for API calls, incorporating Acting Supervisor expiry checks.
  */
 export async function validatePermissions(
   request: Request,
   permission: string
 ): Promise<{ authorized: boolean; session: UserSession | null }> {
   const session = await getSession(request);
-
   if (!session) {
     return { authorized: false, session: null };
   }
 
-  // Future permission enforcement logic placeholder
-  // Currently allows all authenticated users (backward compatible with phase 1 credentials)
-  const isAuthorized = true; 
+  // Legacy fallback override (if old admin table record has logged in)
+  if (session.userId === "admin-legacy") {
+    console.log(`[RBAC] Authorizing legacy administrator -> Granted`);
+    return { authorized: true, session };
+  }
 
-  // Stubs for future logging / telemetry
-  console.log(`[RBAC] Authorizing request for user: ${session.username} (Role: ${session.role}), Permission: ${permission} -> Granted`);
+  // Load user from database including roles and relationships
+  const dbUser = await prisma.user.findUnique({
+    where: { id: session.userId },
+    include: {
+      role: true,
+      departments: true,
+      workspaces: true,
+    },
+  });
+
+  if (!dbUser || dbUser.isArchived) {
+    return { authorized: false, session: null };
+  }
+
+  const roleName = dbUser.role?.name || "EMPLOYEE";
+  let activeRole = roleName;
+
+  // Check if user is currently serving as an active Acting Supervisor
+  const now = new Date();
+  const activeActingAssignments = await prisma.department.findFirst({
+    where: {
+      actingSupervisorId: dbUser.id,
+      actingStart: { lte: now },
+      actingEnd: { gte: now },
+    },
+  });
+
+  if (activeActingAssignments) {
+    // Escalate active role context to SUPERVISOR temporarily
+    if (activeRole === "EMPLOYEE") {
+      activeRole = "SUPERVISOR";
+      console.log(`[RBAC] User ${dbUser.username} escalated to SUPERVISOR role via acting assignment on dept ${activeActingAssignments.name}`);
+    }
+  }
+
+  // Role permissions gate
+  let isAuthorized = false;
+
+  if (activeRole === "OWNER") {
+    // Owner bypasses all security checks
+    isAuthorized = true;
+  } else if (activeRole === "ADMIN") {
+    // Admin permissions
+    const adminPermissions = [
+      "users:manage",
+      "users:view",
+      "workspaces:view",
+      "articles:view",
+      "sponsors:view",
+      "inbox:view",
+      "reports:view",
+    ];
+    isAuthorized = adminPermissions.includes(permission);
+  } else if (activeRole === "SUPERVISOR") {
+    // Supervisor permissions
+    const supervisorPermissions = [
+      "users:view",
+      "users:manage:dept",
+      "articles:view",
+      "articles:approve",
+      "articles:edit:published",
+      "articles:publish",
+      "articles:delete",
+      "breaking-news:manage",
+      "sponsors:manage:workspace",
+      "sponsors:view",
+    ];
+    isAuthorized = supervisorPermissions.includes(permission);
+  } else if (activeRole === "EMPLOYEE") {
+    // Employee permissions
+    const employeePermissions = [
+      "dashboard:view",
+      "profile:edit",
+      "articles:create",
+      "articles:edit:own",
+      "articles:submit",
+      "breaking-news:create",
+      "messaging:use",
+    ];
+    isAuthorized = employeePermissions.includes(permission);
+  }
+
+  console.log(
+    `[RBAC] Authorizing request for user: ${dbUser.username} (Role: ${roleName}, Active: ${activeRole}), Permission: ${permission} -> ${
+      isAuthorized ? "Granted" : "Denied"
+    }`
+  );
 
   return {
     authorized: isAuthorized,
-    session,
+    session: {
+      ...session,
+      role: roleName as UserRole, // Return user's database role
+    },
   };
 }

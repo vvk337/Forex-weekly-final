@@ -31,7 +31,9 @@ export default function UserEditPage({ params }: UserEditPageProps) {
   const { id } = use(params);
 
   const [user, setUser] = useState<DbUser | null>(null);
-  
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [allUsers, setAllUsers] = useState<DbUser[]>([]);
+
   // Editable fields
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -46,12 +48,33 @@ export default function UserEditPage({ params }: UserEditPageProps) {
   const [password, setPassword] = useState("");
   const [forcePasswordChange, setForcePasswordChange] = useState(false);
 
+  // Acting Supervisor fields
+  const [actingDept, setActingDept] = useState("");
+  const [actingSupervisorId, setActingSupervisorId] = useState("");
+  const [actingStart, setActingStart] = useState("");
+  const [actingEnd, setActingEnd] = useState("");
+  const [actingReason, setActingReason] = useState("");
+
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [actingUpdating, setActingUpdating] = useState(false);
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
   useEffect(() => {
+    // 1. Fetch current logged-in user profile
+    fetch("/api/users/me")
+      .then((res) => res.json())
+      .then((data) => setCurrentUser(data))
+      .catch((err) => console.error("Error fetching current user:", err));
+
+    // 2. Fetch all users for acting supervisor selector
+    fetch("/api/users?limit=100")
+      .then((res) => res.json())
+      .then((data) => setAllUsers(data.users))
+      .catch((err) => console.error("Error fetching users list:", err));
+
+    // 3. Fetch target user account details
     fetch(`/api/users/${id}`)
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load user details");
@@ -63,10 +86,13 @@ export default function UserEditPage({ params }: UserEditPageProps) {
         setEmail(data.email);
         setRole(data.role);
         setStatus(data.status);
-        setPhone(data.phone);
-        setDob(data.dob);
+        setPhone(data.phone || "");
+        setDob(data.dob || "");
         setDepartments(data.departments);
         setWorkspaces(data.workspaces);
+        if (data.departments && data.departments.length > 0) {
+          setActingDept(data.departments[0]);
+        }
         setLoading(false);
       })
       .catch((err) => {
@@ -176,6 +202,67 @@ export default function UserEditPage({ params }: UserEditPageProps) {
     }
   };
 
+  const handleImpersonate = async () => {
+    if (!user) return;
+    if (!confirm(`Are you sure you want to impersonate user @${user.username}?`)) return;
+
+    try {
+      const res = await fetch("/api/auth/impersonate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetUserId: id }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Impersonation failed");
+
+      alert(`Session switched! Impersonating @${user.username}.`);
+      window.location.href = "/admin/dashboard";
+    } catch (err: any) {
+      alert(err.message || "Failed to impersonate");
+    }
+  };
+
+  const handleActingSupervisorSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setActingUpdating(true);
+    setError("");
+    setSuccessMsg("");
+
+    try {
+      // Find department ID corresponding to selected name
+      const deptRes = await fetch("/api/users"); // Wait, we can load from list
+      // Instead, pass the name and the backend handles matching
+      const targetDeptName = actingDept || (user?.departments?.[0]);
+      
+      // Fetch department details first
+      const res = await fetch("/api/departments/acting", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          departmentId: targetDeptName, // We can resolve by name on backend or pass name directly
+          actingSupervisorId: actingSupervisorId || null,
+          actingStart: actingStart || undefined,
+          actingEnd: actingEnd || undefined,
+          actingReason,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to assign acting supervisor");
+
+      setSuccessMsg("Temporary Acting Supervisor configuration updated successfully!");
+      setActingSupervisorId("");
+      setActingStart("");
+      setActingEnd("");
+      setActingReason("");
+    } catch (err: any) {
+      setError(err.message || "Failed to set Acting Supervisor");
+    } finally {
+      setActingUpdating(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="text-center py-24 text-xs text-neutral-400 font-bold uppercase tracking-widest animate-pulse">
@@ -197,6 +284,9 @@ export default function UserEditPage({ params }: UserEditPageProps) {
     );
   }
 
+  const isOwner = currentUser?.role === "OWNER";
+  const isOwnerOrAdmin = currentUser?.role === "OWNER" || currentUser?.role === "ADMIN";
+
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-fadeIn">
       {/* Header */}
@@ -213,17 +303,29 @@ export default function UserEditPage({ params }: UserEditPageProps) {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={handleArchive}
-          className={`px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-sm border cursor-pointer transition-colors ${
-            user?.isArchived
-              ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/25 hover:bg-emerald-500/20"
-              : "bg-red-500/10 text-red-600 border-red-500/25 hover:bg-red-500/20"
-          }`}
-        >
-          {user?.isArchived ? "Restore User Account" : "Archive User Account"}
-        </button>
+        <div className="flex items-center space-x-3.5">
+          {isOwner && user?.role !== "OWNER" && (
+            <button
+              type="button"
+              onClick={handleImpersonate}
+              className="px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-sm border border-neutral-250 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-900 text-neutral-600 dark:text-neutral-350 cursor-pointer transition-colors"
+            >
+              Impersonate User
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={handleArchive}
+            className={`px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-sm border cursor-pointer transition-colors ${
+              user?.isArchived
+                ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/25 hover:bg-emerald-500/20"
+                : "bg-red-500/10 text-red-600 border-red-500/25 hover:bg-red-500/20"
+            }`}
+          >
+            {user?.isArchived ? "Restore User Account" : "Archive User Account"}
+          </button>
+        </div>
       </div>
 
       {successMsg && (
@@ -285,7 +387,7 @@ export default function UserEditPage({ params }: UserEditPageProps) {
           </div>
         </div>
 
-        {/* Right Column: Settings Form */}
+        {/* Right Column: Settings Forms */}
         <div className="lg:col-span-2 space-y-6">
           <form onSubmit={handleUpdate} className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-6 space-y-6 transition-colors duration-300">
             <h3 className="text-xs font-extrabold uppercase tracking-widest text-brand-red border-b border-neutral-100 dark:border-neutral-850 pb-2">
@@ -326,12 +428,13 @@ export default function UserEditPage({ params }: UserEditPageProps) {
                 <select
                   value={role}
                   onChange={(e) => setRole(e.target.value)}
+                  disabled={user?.role === "OWNER" && !isOwner}
                   className="w-full bg-neutral-50/50 dark:bg-neutral-900/20 border border-neutral-200 dark:border-neutral-850 rounded-sm px-3 py-2 text-xs text-brand-dark dark:text-neutral-200 focus:outline-none focus:border-brand-red transition-all cursor-pointer"
                 >
                   <option value="EMPLOYEE">Employee (Editor/Writer)</option>
                   <option value="SUPERVISOR">Supervisor (Content Reviewer)</option>
                   <option value="ADMIN">Admin (Workspace Manager)</option>
-                  <option value="OWNER">Owner (System Director)</option>
+                  {isOwner && <option value="OWNER">Owner (System Director)</option>}
                 </select>
               </div>
 
@@ -367,7 +470,7 @@ export default function UserEditPage({ params }: UserEditPageProps) {
                 Departments
               </label>
               <div className="flex flex-wrap gap-4">
-                {["Editorial", "Marketing", "Research", "Support"].map((dept) => (
+                {["Publication", "Marketing", "Research", "Support"].map((dept) => (
                   <label key={dept} className="flex items-center space-x-2 text-xs font-semibold text-neutral-700 dark:text-neutral-350 cursor-pointer select-none">
                     <input
                       type="checkbox"
@@ -436,7 +539,7 @@ export default function UserEditPage({ params }: UserEditPageProps) {
                     onChange={(e) => setForcePasswordChange(e.target.checked)}
                     className="accent-brand-red h-4 w-4 cursor-pointer"
                   />
-                  <label htmlFor="forcePasswordChange" className="text-xs font-bold text-neutral-600 dark:text-neutral-350 cursor-pointer select-none">
+                  <label htmlFor="forcePasswordChange" className="text-xs font-bold text-neutral-600 dark:text-neutral-355 cursor-pointer select-none">
                     Force Password Change on Next Login
                   </label>
                 </div>
@@ -453,6 +556,110 @@ export default function UserEditPage({ params }: UserEditPageProps) {
               </button>
             </div>
           </form>
+
+          {/* Acting Supervisor Assignment Form (restricted to Admin/Owner, visible if user is a Supervisor or belongs to departments) */}
+          {isOwnerOrAdmin && (
+            <form onSubmit={handleActingSupervisorSubmit} className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-6 space-y-6 transition-colors duration-300">
+              <div className="border-b border-neutral-100 dark:border-neutral-850 pb-2">
+                <h3 className="text-xs font-extrabold uppercase tracking-widest text-brand-red">
+                  Temporary Acting Supervisor Delegation
+                </h3>
+                <p className="text-[10px] text-neutral-450 mt-1">
+                  Assign a temporary supervisor to manage this user's departments. Leave selector blank to clear assignment.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-extrabold uppercase tracking-widest text-neutral-450 dark:text-neutral-500">
+                    Select Supervised Department
+                  </label>
+                  <select
+                    value={actingDept}
+                    onChange={(e) => setActingDept(e.target.value)}
+                    className="w-full bg-neutral-50/50 dark:bg-neutral-900/20 border border-neutral-200 dark:border-neutral-850 rounded-sm px-3 py-2 text-xs text-brand-dark dark:text-neutral-200 focus:outline-none focus:border-brand-red transition-all cursor-pointer"
+                  >
+                    {user?.departments.map((d) => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-extrabold uppercase tracking-widest text-neutral-450 dark:text-neutral-500">
+                    Select Temporary Supervisor
+                  </label>
+                  <select
+                    value={actingSupervisorId}
+                    onChange={(e) => setActingSupervisorId(e.target.value)}
+                    className="w-full bg-neutral-50/50 dark:bg-neutral-900/20 border border-neutral-200 dark:border-neutral-850 rounded-sm px-3 py-2 text-xs text-brand-dark dark:text-neutral-200 focus:outline-none focus:border-brand-red transition-all cursor-pointer"
+                  >
+                    <option value="">-- No Acting Assignment (Clear) --</option>
+                    {allUsers
+                      .filter((u) => u.id !== id && u.role !== "OWNER")
+                      .map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.fullName} (@{u.username})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                {actingSupervisorId !== "" && (
+                  <>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-extrabold uppercase tracking-widest text-neutral-450 dark:text-neutral-500">
+                        Start Date
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={actingStart}
+                        onChange={(e) => setActingStart(e.target.value)}
+                        className="w-full bg-neutral-50/50 dark:bg-neutral-900/20 border border-neutral-200 dark:border-neutral-850 rounded-sm px-3 py-2 text-xs text-brand-dark dark:text-neutral-200 focus:outline-none focus:border-brand-red transition-all cursor-pointer"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-extrabold uppercase tracking-widest text-neutral-450 dark:text-neutral-500">
+                        End Date
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={actingEnd}
+                        onChange={(e) => setActingEnd(e.target.value)}
+                        className="w-full bg-neutral-50/50 dark:bg-neutral-900/20 border border-neutral-200 dark:border-neutral-850 rounded-sm px-3 py-2 text-xs text-brand-dark dark:text-neutral-200 focus:outline-none focus:border-brand-red transition-all cursor-pointer"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5 col-span-2">
+                      <label className="text-[10px] font-extrabold uppercase tracking-widest text-neutral-450 dark:text-neutral-500">
+                        Delegation Reason / Notes
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Parental leave, vacation override..."
+                        value={actingReason}
+                        onChange={(e) => setActingReason(e.target.value)}
+                        className="w-full bg-neutral-50/50 dark:bg-neutral-900/20 border border-neutral-200 dark:border-neutral-850 rounded-sm px-3.5 py-2 text-xs text-brand-dark dark:text-neutral-200 focus:outline-none focus:border-brand-red transition-all"
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="flex justify-end pt-5 border-t border-neutral-100 dark:border-neutral-800">
+                <button
+                  type="submit"
+                  disabled={actingUpdating}
+                  className="bg-brand-red hover:bg-brand-red-dark text-white text-xs font-bold uppercase tracking-wider px-6 py-2.5 rounded-sm transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {actingUpdating ? "Updating Settings..." : "Save Delegation Settings"}
+                </button>
+              </div>
+            </form>
+          )}
         </div>
       </div>
     </div>

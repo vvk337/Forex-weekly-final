@@ -6,12 +6,6 @@ interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
-// Helper to authenticate requests
-async function isAuthenticated(request: Request) {
-  const { authorized } = await validatePermissions(request, "articles:write");
-  return authorized;
-}
-
 // GET single article
 export async function GET(request: Request, { params }: RouteParams) {
   try {
@@ -31,13 +25,9 @@ export async function GET(request: Request, { params }: RouteParams) {
   }
 }
 
-// PUT update article (Admin Only)
+// PUT update article
 export async function PUT(request: Request, { params }: RouteParams) {
   try {
-    if (!(await isAuthenticated(request))) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { id } = await params;
     const body = await request.json();
     const { title, excerpt, content, category, author, imageUrl, isFeatured } = body;
@@ -45,6 +35,18 @@ export async function PUT(request: Request, { params }: RouteParams) {
     const existingArticle = await prisma.article.findUnique({ where: { id } });
     if (!existingArticle) {
       return NextResponse.json({ error: "Article not found" }, { status: 404 });
+    }
+
+    // Role-based editing boundaries
+    const { authorized, session } = await validatePermissions(request, "articles:edit:published");
+    if (!authorized || !session) {
+      // If they don't have supervisor edit permission, check if employee editing their own draft
+      const selfCheck = await validatePermissions(request, "articles:edit:own");
+      const isAuthor = existingArticle.author === selfCheck.session?.username;
+
+      if (!selfCheck.authorized || !isAuthor) {
+        return NextResponse.json({ error: "Unauthorized access: You can only edit your own drafts" }, { status: 403 });
+      }
     }
 
     // If changing to featured, unfeature others
@@ -75,10 +77,11 @@ export async function PUT(request: Request, { params }: RouteParams) {
   }
 }
 
-// DELETE article (Admin Only)
+// DELETE article (Supervisor: moves to trash; Admin/Owner: deletes permanently)
 export async function DELETE(request: Request, { params }: RouteParams) {
   try {
-    if (!(await isAuthenticated(request))) {
+    const { authorized, session } = await validatePermissions(request, "articles:delete");
+    if (!authorized || !session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -89,11 +92,21 @@ export async function DELETE(request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: "Article not found" }, { status: 404 });
     }
 
+    if (session.role === "SUPERVISOR") {
+      // Supervisor: Move to trash category only
+      await prisma.article.update({
+        where: { id },
+        data: { category: "trash" },
+      });
+      return NextResponse.json({ success: true, message: "Article moved to trash successfully" }, { status: 200 });
+    }
+
+    // Owner or Admin: Delete permanently
     await prisma.article.delete({
       where: { id },
     });
 
-    return NextResponse.json({ success: true, message: "Article deleted successfully" }, { status: 200 });
+    return NextResponse.json({ success: true, message: "Article permanently deleted successfully" }, { status: 200 });
   } catch (error) {
     console.error("DELETE Article Error:", error);
     return NextResponse.json({ error: "Failed to delete article" }, { status: 500 });

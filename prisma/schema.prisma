@@ -58,28 +58,56 @@ model TickerConfig {
 }
 
 model User {
-  id                  String   @id @default(uuid())
+  id                  String       @id @default(uuid())
   fullName            String
-  username            String   @unique
-  email               String   @unique
-  password            String   // Hashed password
-  role                String   @default("EMPLOYEE") // OWNER, ADMIN, SUPERVISOR, EMPLOYEE
-  status              String   @default("ACTIVE") // ACTIVE, INACTIVE, SUSPENDED
-  profilePhoto        String   @default("/images/default-avatar.png")
-  departments         String   @default("[]") // Serialized JSON string array
-  workspaces          String   @default("[]") // Serialized JSON string array
-  permissions         String   @default("[]") // Serialized JSON string array (future permission tags)
-  phone               String   @default("")
-  dob                 String   @default("")
-  activeSince         DateTime @default(now())
+  username            String       @unique
+  email               String       @unique
+  password            String       // Hashed password
+  roleId              String?      // Reference to Role
+  role                Role?        @relation(fields: [roleId], references: [id])
+  status              String       @default("ACTIVE") // ACTIVE, INACTIVE, SUSPENDED
+  profilePhoto        String       @default("/images/default-avatar.png")
+  departments         Department[] @relation("DeptMembers")
+  workspaces          Workspace[]  @relation("WorkspaceMembers")
+  supervisedDepartments Department[] @relation("DeptSupervisor")
+  actingSupervisedDepartments Department[] @relation("DeptActingSupervisor")
+  phone               String       @default("")
+  dob                 String       @default("")
+  activeSince         DateTime     @default(now())
   lastLogin           DateTime?
   lastActivity        DateTime?
-  isOnline            Boolean  @default(false)
-  isArchived          Boolean  @default(false)
-  createdBy           String   @default("System")
-  updatedAt           DateTime @updatedAt
-  forcePasswordChange Boolean  @default(false)
-  tempPassword        String   @default("")
+  isOnline            Boolean      @default(false)
+  isArchived          Boolean      @default(false)
+  createdBy           String       @default("System")
+  updatedAt           DateTime     @updatedAt
+  forcePasswordChange Boolean      @default(false)
+  tempPassword        String       @default("")
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique // OWNER, ADMIN, SUPERVISOR, EMPLOYEE
+  users       User[]
+}
+
+model Department {
+  id                  String    @id @default(uuid())
+  name                String    @unique // Publication, Marketing, Research
+  supervisorId        String?
+  supervisor          User?     @relation("DeptSupervisor", fields: [supervisorId], references: [id])
+  members             User[]    @relation("DeptMembers")
+  actingSupervisorId  String?
+  actingSupervisor    User?     @relation("DeptActingSupervisor", fields: [actingSupervisorId], references: [id])
+  actingStart         DateTime?
+  actingEnd           DateTime?
+  actingReason        String?
+  actingAssignedBy    String?
+}
+
+model Workspace {
+  id      String   @id @default(uuid())
+  name    String   @unique // Publication, Marketing, Research
+  members User[]   @relation("WorkspaceMembers")
 }
 
 model UserSession {

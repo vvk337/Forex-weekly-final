@@ -28,6 +28,11 @@ export async function GET(request: Request) {
 
     const user = await prisma.user.findUnique({
       where: { id: session.userId },
+      include: {
+        role: true,
+        departments: true,
+        workspaces: true,
+      },
     });
 
     if (!user) {
@@ -36,9 +41,10 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       ...user,
-      departments: JSON.parse(user.departments),
-      workspaces: JSON.parse(user.workspaces),
-      permissions: JSON.parse(user.permissions),
+      role: user.role?.name || "EMPLOYEE",
+      departments: user.departments.map((d) => d.name),
+      workspaces: user.workspaces.map((w) => w.name),
+      permissions: [], // Deprecated
     }, { status: 200 });
   } catch (error) {
     console.error("GET Users Me Error:", error);

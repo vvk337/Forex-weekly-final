@@ -7,29 +7,40 @@ interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
-// GET single user details
+// GET single user details (relational mapping)
 export async function GET(request: Request, { params }: RouteParams) {
   try {
-    const { authorized } = await validatePermissions(request, "users:manage");
-    if (!authorized) {
+    const { id } = await params;
+    const { authorized, session } = await validatePermissions(request, "users:view");
+    if (!authorized || !session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = await params;
     const user = await prisma.user.findUnique({
       where: { id },
+      include: {
+        role: true,
+        departments: true,
+        workspaces: true,
+      },
     });
 
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Format serialized JSON strings back to Arrays
+    // Mask OWNER from non-owners
+    const isOwner = session.role === "OWNER";
+    if (user.role?.name === "OWNER" && !isOwner) {
+      return NextResponse.json({ error: "Unauthorized Access" }, { status: 403 });
+    }
+
     const formatted = {
       ...user,
-      departments: JSON.parse(user.departments),
-      workspaces: JSON.parse(user.workspaces),
-      permissions: JSON.parse(user.permissions),
+      role: user.role?.name || "EMPLOYEE",
+      departments: user.departments.map((d) => d.name),
+      workspaces: user.workspaces.map((w) => w.name),
+      permissions: [], // Deprecated
     };
 
     return NextResponse.json(formatted, { status: 200 });
@@ -39,7 +50,7 @@ export async function GET(request: Request, { params }: RouteParams) {
   }
 }
 
-// PUT update user profile/credentials/archives
+// PUT update user profile/credentials/archives with Supervisor & Owner boundary checks
 export async function PUT(request: Request, { params }: RouteParams) {
   try {
     const { id } = await params;
@@ -47,10 +58,10 @@ export async function PUT(request: Request, { params }: RouteParams) {
     const {
       fullName,
       email,
-      role,
+      role, // OWNER, ADMIN, SUPERVISOR, EMPLOYEE
       status,
-      departments,
-      workspaces,
+      departments, // String Array e.g. ["Publication"]
+      workspaces,  // String Array e.g. ["Publication"]
       phone,
       dob,
       password,
@@ -60,22 +71,61 @@ export async function PUT(request: Request, { params }: RouteParams) {
       profilePhoto,
     } = body;
 
-    // Check if the user is self-updating their profile or if it's an admin managing accounts
     const { authorized, session } = await validatePermissions(request, "users:manage");
     const isSelfUpdate = session?.userId === id;
 
+    // Check boundary auth rules
     if (!authorized && !isSelfUpdate) {
       return NextResponse.json({ error: "Unauthorized access" }, { status: 401 });
     }
 
-    const existingUser = await prisma.user.findUnique({ where: { id } });
+    const existingUser = await prisma.user.findUnique({
+      where: { id },
+      include: { role: true, departments: true },
+    });
+
     if (!existingUser) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    const isTargetOwner = existingUser.role?.name === "OWNER";
+    const isTargetAdmin = existingUser.role?.name === "ADMIN";
+
+    // 1. OWNER Safeguards (cannot be archived or deleted, cannot be modified by non-owners)
+    if (isTargetOwner) {
+      if (session?.role !== "OWNER") {
+        return NextResponse.json({ error: "Only Owners can modify Owner accounts" }, { status: 403 });
+      }
+      if (isArchived === true) {
+        return NextResponse.json({ error: "Owner accounts cannot be archived" }, { status: 400 });
+      }
+    }
+
+    // 2. SUPERVISOR Boundary Safeguards
+    if (session?.role === "SUPERVISOR" && !isSelfUpdate) {
+      // Cannot manage Owner or Admin
+      if (isTargetOwner || isTargetAdmin) {
+        return NextResponse.json({ error: "Supervisors cannot manage Admins or Owner" }, { status: 403 });
+      }
+
+      // Check if target user belongs to a department supervised by this supervisor
+      const activeUser = await prisma.user.findUnique({
+        where: { id: session.userId },
+        include: { supervisedDepartments: true },
+      });
+
+      const supervisedDeptIds = activeUser?.supervisedDepartments.map((d) => d.id) || [];
+      const targetUserDeptIds = existingUser.departments.map((d) => d.id);
+      
+      const hasDeptIntersection = targetUserDeptIds.some((id) => supervisedDeptIds.includes(id));
+      if (!hasDeptIntersection) {
+        return NextResponse.json({ error: "Supervisors can only manage users within their department" }, { status: 403 });
+      }
+    }
+
     const updateData: any = {};
 
-    // Basic details (always editable)
+    // Basic metadata (always updateable)
     if (fullName !== undefined) updateData.fullName = fullName;
     if (phone !== undefined) updateData.phone = phone;
     if (dob !== undefined) updateData.dob = dob;
@@ -98,17 +148,26 @@ export async function PUT(request: Request, { params }: RouteParams) {
     }
 
     // Role / Workspace / Departments settings (restricted to administrative actions, cannot self-assign roles)
-    if (authorized) {
-      if (role !== undefined) updateData.role = role;
+    const isAdminOrOwner = session?.role === "ADMIN" || session?.role === "OWNER" || session?.role === "SUPERVISOR";
+    if (isAdminOrOwner && !isSelfUpdate) {
       if (status !== undefined) updateData.status = status;
-      if (departments !== undefined) updateData.departments = JSON.stringify(departments);
-      if (workspaces !== undefined) updateData.workspaces = JSON.stringify(workspaces);
       if (forcePasswordChange !== undefined) updateData.forcePasswordChange = !!forcePasswordChange;
       if (tempPassword !== undefined) updateData.tempPassword = tempPassword;
 
+      if (role !== undefined) {
+        // Prevent assigning OWNER unless requester is OWNER
+        if (role === "OWNER" && session?.role !== "OWNER") {
+          return NextResponse.json({ error: "Only Owners can assign OWNER role" }, { status: 403 });
+        }
+        
+        const targetRoleObj = await prisma.role.findUnique({ where: { name: role } });
+        if (targetRoleObj) {
+          updateData.roleId = targetRoleObj.id;
+        }
+      }
+
       if (isArchived !== undefined) {
         updateData.isArchived = isArchived;
-        // If archived, set status to INACTIVE, otherwise restore to ACTIVE
         if (isArchived) {
           updateData.status = "INACTIVE";
           updateData.isOnline = false;
@@ -116,11 +175,32 @@ export async function PUT(request: Request, { params }: RouteParams) {
           updateData.status = "ACTIVE";
         }
       }
+
+      // Sync Departments
+      if (departments !== undefined && Array.isArray(departments)) {
+        // Disconnect all previous departments and connect new list
+        const deptsConnect = departments.map((d: string) => ({ name: d }));
+        updateData.departments = {
+          set: [],
+          connect: deptsConnect,
+        };
+      }
+
+      // Sync Workspaces
+      if (workspaces !== undefined && Array.isArray(workspaces)) {
+        // Disconnect all previous workspaces and connect new list
+        const wsConnect = workspaces.map((w: string) => ({ name: w }));
+        updateData.workspaces = {
+          set: [],
+          connect: wsConnect,
+        };
+      }
     }
 
     const updatedUser = await prisma.user.update({
       where: { id },
       data: updateData,
+      include: { role: true },
     });
 
     return NextResponse.json({
@@ -130,7 +210,7 @@ export async function PUT(request: Request, { params }: RouteParams) {
         fullName: updatedUser.fullName,
         username: updatedUser.username,
         email: updatedUser.email,
-        role: updatedUser.role,
+        role: updatedUser.role?.name || "EMPLOYEE",
         isArchived: updatedUser.isArchived,
       },
     });

@@ -3,28 +3,36 @@ import bcrypt from "bcryptjs";
 import prisma from "@/lib/db";
 import { validatePermissions } from "@/lib/auth-helpers";
 
-// GET List Users
+// GET List Users (relational mapping)
 export async function GET(request: Request) {
   try {
-    const { authorized } = await validatePermissions(request, "users:manage");
-    if (!authorized) {
+    const { authorized, session } = await validatePermissions(request, "users:view");
+    if (!authorized || !session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") || "";
-    const role = searchParams.get("role") || "";
+    const roleNameParam = searchParams.get("role") || "";
     const status = searchParams.get("status") || "";
-    const department = searchParams.get("department") || "";
+    const departmentName = searchParams.get("department") || "";
     const archived = searchParams.get("archived"); // 'true' or 'false'
     const sort = searchParams.get("sort") || "fullName";
     const order = searchParams.get("order") || "asc";
     const page = parseInt(searchParams.get("page") || "1", 10);
     const limit = parseInt(searchParams.get("limit") || "10", 10);
 
+    // Load active logged-in user to check Owner/Supervisor constraints
+    const activeUser = await prisma.user.findUnique({
+      where: { id: session.userId },
+      include: { role: true },
+    });
+
+    const isOwner = activeUser?.role?.name === "OWNER";
+
     const where: any = {};
 
-    // Apply filters
+    // Apply search matches on names, usernames, and emails
     if (search) {
       where.OR = [
         { fullName: { contains: search } },
@@ -33,8 +41,16 @@ export async function GET(request: Request) {
       ];
     }
 
-    if (role) {
-      where.role = role;
+    // Role filtering (with Owner account masking)
+    if (roleNameParam) {
+      // If filtering for OWNER but not OWNER ourselves, return empty list or force EMPLOYEE filter
+      if (roleNameParam === "OWNER" && !isOwner) {
+        return NextResponse.json({ users: [], total: 0, page, limit }, { status: 200 });
+      }
+      where.role = { name: roleNameParam };
+    } else if (!isOwner) {
+      // Hide OWNER profiles from listings for non-owner roles
+      where.role = { name: { not: "OWNER" } };
     }
 
     if (status) {
@@ -46,33 +62,47 @@ export async function GET(request: Request) {
     } else if (archived === "false") {
       where.isArchived = false;
     } else {
-      // Default to non-archived if not specified
       where.isArchived = false;
     }
 
-    if (department) {
-      where.departments = { contains: `"${department}"` };
+    if (departmentName) {
+      where.departments = {
+        some: { name: departmentName },
+      };
     }
 
-    // Pagination query parameters
     const skip = (page - 1) * limit;
+
+    // Build sorting parameters (Prisma dynamic queries)
+    let orderBy: any = {};
+    if (sort === "role") {
+      orderBy = { role: { name: order } };
+    } else {
+      orderBy = { [sort]: order };
+    }
 
     const [users, total] = await Promise.all([
       prisma.user.findMany({
         where,
-        orderBy: { [sort]: order },
+        include: {
+          role: true,
+          departments: true,
+          workspaces: true,
+        },
+        orderBy,
         skip,
         take: limit,
       }),
       prisma.user.count({ where }),
     ]);
 
-    // Format serialized fields back to JS Arrays
+    // Format relational schemas back to flat format expected by components
     const formatted = users.map((u) => ({
       ...u,
-      departments: JSON.parse(u.departments),
-      workspaces: JSON.parse(u.workspaces),
-      permissions: JSON.parse(u.permissions),
+      role: u.role?.name || "EMPLOYEE",
+      departments: u.departments.map((d) => d.name),
+      workspaces: u.workspaces.map((w) => w.name),
+      permissions: [], // Deprecated in favor of DB Roles
     }));
 
     return NextResponse.json({ users: formatted, total, page, limit }, { status: 200 });
@@ -82,11 +112,11 @@ export async function GET(request: Request) {
   }
 }
 
-// POST Create User
+// POST Create User (relational mapping)
 export async function POST(request: Request) {
   try {
     const { authorized, session } = await validatePermissions(request, "users:manage");
-    if (!authorized) {
+    if (!authorized || !session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -96,20 +126,24 @@ export async function POST(request: Request) {
       username,
       email,
       password,
-      role,
-      departments,
-      workspaces,
+      role, // OWNER, ADMIN, SUPERVISOR, EMPLOYEE
+      departments, // String Array e.g. ["Publication"]
+      workspaces,  // String Array e.g. ["Publication"]
       phone,
       dob,
       forcePasswordChange,
     } = body;
 
-    // Validation checks
     if (!fullName || !username || !email || !password) {
       return NextResponse.json(
         { error: "Required fields are missing: fullName, username, email, password" },
         { status: 400 }
       );
+    }
+
+    // Role checks (Admins cannot assign OWNER role)
+    if (role === "OWNER" && session.role !== "OWNER") {
+      return NextResponse.json({ error: "Only Owners can create Owner accounts" }, { status: 403 });
     }
 
     // Check unique constraints
@@ -125,23 +159,45 @@ export async function POST(request: Request) {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Resolve Role model ID
+    const targetRole = await prisma.role.findUnique({
+      where: { name: role || "EMPLOYEE" },
+    });
+    if (!targetRole) {
+      return NextResponse.json({ error: "Invalid user role specified" }, { status: 400 });
+    }
+
+    // Build connections query for departments & workspaces
+    const deptsConnect = Array.isArray(departments)
+      ? departments.map((d: string) => ({ name: d }))
+      : [];
+    const wsConnect = Array.isArray(workspaces)
+      ? workspaces.map((w: string) => ({ name: w }))
+      : [];
+
     const newUser = await prisma.user.create({
       data: {
         fullName,
         username,
         email,
         password: hashedPassword,
-        role: role || "EMPLOYEE",
+        roleId: targetRole.id,
         status: "ACTIVE",
         profilePhoto: "/images/default-avatar.png",
-        departments: Array.isArray(departments) ? JSON.stringify(departments) : "[]",
-        workspaces: Array.isArray(workspaces) ? JSON.stringify(workspaces) : "[]",
-        permissions: "[]",
         phone: phone || "",
         dob: dob || "",
         isArchived: false,
         createdBy: session?.username || "Admin",
         forcePasswordChange: !!forcePasswordChange,
+        departments: {
+          connect: deptsConnect,
+        },
+        workspaces: {
+          connect: wsConnect,
+        },
+      },
+      include: {
+        role: true,
       },
     });
 
@@ -153,7 +209,7 @@ export async function POST(request: Request) {
           fullName: newUser.fullName,
           username: newUser.username,
           email: newUser.email,
-          role: newUser.role,
+          role: newUser.role?.name || "EMPLOYEE",
         },
       },
       { status: 201 }

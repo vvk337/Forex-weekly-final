@@ -36,7 +36,11 @@ export async function GET(request: Request) {
     const category = searchParams.get("category");
     const isFeatured = searchParams.get("isFeatured");
 
-    const where: any = {};
+    // Filter out trashed articles by default
+    const where: any = {
+      category: { not: "trash" },
+    };
+    
     if (category) {
       where.category = category;
     }
@@ -56,10 +60,10 @@ export async function GET(request: Request) {
   }
 }
 
-// POST new article (Admin Only)
+// POST new article
 export async function POST(request: Request) {
   try {
-    const { authorized } = await validatePermissions(request, "articles:write");
+    const { authorized, session } = await validatePermissions(request, "articles:create");
     if (!authorized) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
