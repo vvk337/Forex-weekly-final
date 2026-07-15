@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { validatePermissions } from "@/lib/auth-helpers";
+import { createAuditLog } from "@/lib/audit-helper";
 
 // Helper to check if request is authenticated as admin
 async function isAuthenticated(request: Request) {
@@ -91,6 +92,15 @@ export async function PUT(request: Request) {
         bgImageUrl: bgImageUrl !== undefined ? bgImageUrl : existing.bgImageUrl,
       },
     });
+
+    await createAuditLog(
+      request,
+      null,
+      "Edited",
+      "SPONSOR",
+      updated.id,
+      updated.title
+    );
 
     return NextResponse.json(updated, { status: 200 });
   } catch (error) {

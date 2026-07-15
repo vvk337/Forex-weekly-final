@@ -126,3 +126,16 @@ model UserSession {
   expiresAt DateTime
   revoked   Boolean  @default(false)
 }
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  timestamp   DateTime @default(now())
+  username    String
+  action      String   // Logged In, Logged Out, Created, Edited, Approved, Published, Scheduled, Archived, Trashed, Restored
+  module      String   // ARTICLE, USER, SPONSOR, BREAKING_NEWS, AUTH, SYSTEM
+  objectId    String?
+  objectName  String?
+  result      String   @default("SUCCESS") // SUCCESS, FAILURE
+  ipAddress   String?
+  details     String?  // JSON string details
+}

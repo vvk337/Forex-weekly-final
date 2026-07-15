@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { validatePermissions } from "@/lib/auth-helpers";
+import { createAuditLog } from "@/lib/audit-helper";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -133,6 +134,34 @@ export async function PUT(request: Request, { params }: RouteParams) {
       data: dataToUpdate,
     });
 
+    let auditAction = "Edited";
+    let auditComment = null;
+    if (status !== undefined && status !== existingArticle.status) {
+      if (status === "PENDING") auditAction = "Submitted for Review";
+      else if (status === "PUBLISHED") auditAction = "Published";
+      else if (status === "SCHEDULED") {
+        auditAction = "Scheduled";
+        auditComment = `Scheduled at: ${scheduledAt}`;
+      }
+      else if (status === "DRAFT" && revisionComment) {
+        auditAction = "Returned for Revision";
+        auditComment = revisionComment;
+      }
+      else if (status === "ARCHIVED") auditAction = "Archived";
+      else if (status === "TRASH") auditAction = "Moved to Trash";
+    }
+
+    await createAuditLog(
+      request,
+      session,
+      auditAction,
+      "ARTICLE",
+      updated.id,
+      updated.title,
+      "SUCCESS",
+      auditComment
+    );
+
     return NextResponse.json(updated, { status: 200 });
   } catch (error) {
     console.error("PUT Article Error:", error);
@@ -167,6 +196,16 @@ export async function DELETE(request: Request, { params }: RouteParams) {
         where: { id },
         data: { status: "DRAFT", revisionComment: null },
       });
+
+      await createAuditLog(
+        request,
+        session,
+        "Restored",
+        "ARTICLE",
+        restored.id,
+        restored.title
+      );
+
       return NextResponse.json({ success: true, message: "Article restored as draft successfully", article: restored }, { status: 200 });
     }
 
@@ -176,6 +215,16 @@ export async function DELETE(request: Request, { params }: RouteParams) {
         where: { id },
         data: { status: "TRASH" },
       });
+
+      await createAuditLog(
+        request,
+        session,
+        "Moved to Trash",
+        "ARTICLE",
+        existing.id,
+        existing.title
+      );
+
       return NextResponse.json({ success: true, message: "Article moved to trash successfully" }, { status: 200 });
     }
 
@@ -183,6 +232,15 @@ export async function DELETE(request: Request, { params }: RouteParams) {
     await prisma.article.delete({
       where: { id },
     });
+
+    await createAuditLog(
+      request,
+      session,
+      "Deleted Permanently",
+      "ARTICLE",
+      existing.id,
+      existing.title
+    );
 
     return NextResponse.json({ success: true, message: "Article permanently deleted successfully" }, { status: 200 });
   } catch (error) {

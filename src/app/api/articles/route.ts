@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { validatePermissions, getSession } from "@/lib/auth-helpers";
 import { mockArticles } from "@/data/mockData";
+import { createAuditLog } from "@/lib/audit-helper";
 
 // Seed articles dynamically if DB is empty
 async function ensureArticlesSeeded() {
@@ -193,6 +194,15 @@ export async function POST(request: Request) {
         department: userDept,
       },
     });
+
+    await createAuditLog(
+      request,
+      session,
+      "Created",
+      "ARTICLE",
+      article.id,
+      article.title
+    );
 
     return NextResponse.json(article, { status: 201 });
   } catch (error) {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { validatePermissions } from "@/lib/auth-helpers";
+import { createAuditLog } from "@/lib/audit-helper";
 
 // Cache variables for live RSS feed
 let cachedHeadlines: string[] = [];
@@ -174,6 +175,48 @@ export async function PUT(request: Request) {
 
     if (!mode || (mode !== "auto" && mode !== "manual")) {
       return NextResponse.json({ error: "Invalid ticker mode (must be 'auto' or 'manual')" }, { status: 400 });
+    }
+
+    const existing = await prisma.tickerConfig.findUnique({ where: { id: "ticker" } });
+    
+    // Audit Manual Items
+    let oldItems: any[] = [];
+    if (existing && existing.manualText) {
+      try {
+        oldItems = JSON.parse(existing.manualText);
+      } catch (e) {}
+    }
+    let newItems: any[] = [];
+    try {
+      newItems = JSON.parse(manualText || "[]");
+    } catch (e) {}
+
+    const oldTexts = oldItems.map(x => x.text);
+    const newTexts = newItems.map(x => x.text);
+
+    for (const item of newItems) {
+      if (!oldTexts.includes(item.text)) {
+        await createAuditLog(request, null, "Created", "BREAKING_NEWS", "ticker", item.text);
+      } else {
+        const oldItem = oldItems.find(x => x.text === item.text);
+        if (oldItem && (oldItem.expiresAt !== item.expiresAt || oldItem.expiryOption !== item.expiryOption)) {
+          await createAuditLog(request, null, "Edited", "BREAKING_NEWS", "ticker", item.text);
+        }
+      }
+    }
+
+    for (const item of oldItems) {
+      if (!newTexts.includes(item.text)) {
+        await createAuditLog(request, null, "Deleted", "BREAKING_NEWS", "ticker", item.text);
+      }
+    }
+
+    if (existing && mode !== existing.mode) {
+      if (mode === "manual") {
+        await createAuditLog(request, null, "Published", "BREAKING_NEWS", "ticker", "Manual Ticker Mode Activated");
+      } else {
+        await createAuditLog(request, null, "Edited", "BREAKING_NEWS", "ticker", "Auto Ticker Mode Activated");
+      }
     }
 
     // Upsert the configuration record

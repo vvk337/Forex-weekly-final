@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import prisma from "@/lib/db";
 import { validatePermissions } from "@/lib/auth-helpers";
+import { createAuditLog } from "@/lib/audit-helper";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -202,6 +203,42 @@ export async function PUT(request: Request, { params }: RouteParams) {
       data: updateData,
       include: { role: true },
     });
+
+    // Logging transitions
+    let loggedAction = "Profile Updated";
+    let loggedModule: "USER" | "SYSTEM" | "AUTH" = "USER";
+    let loggedComment = null;
+
+    if (isArchived !== undefined && isArchived !== existingUser.isArchived) {
+      loggedAction = isArchived ? "Archived" : "Restored";
+      loggedModule = "SYSTEM";
+    } else if (role !== undefined && role !== existingUser.role?.name) {
+      loggedAction = "Role Changed";
+      loggedModule = "SYSTEM";
+      loggedComment = `New Role: ${role}`;
+    } else if (departments !== undefined) {
+      loggedAction = "Department Changed";
+      loggedModule = "SYSTEM";
+      loggedComment = `Departments: ${departments.join(", ")}`;
+    } else if (workspaces !== undefined) {
+      loggedAction = "Workspace Changed";
+      loggedModule = "SYSTEM";
+      loggedComment = `Workspaces: ${workspaces.join(", ")}`;
+    } else if (password !== undefined && password.trim() !== "") {
+      loggedAction = isSelfUpdate ? "Password Changed" : "Password Reset";
+      loggedModule = "AUTH";
+    }
+
+    await createAuditLog(
+      request,
+      session,
+      loggedAction,
+      loggedModule,
+      updatedUser.id,
+      updatedUser.username,
+      "SUCCESS",
+      loggedComment
+    );
 
     return NextResponse.json({
       success: true,

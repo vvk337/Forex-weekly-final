@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import prisma from "@/lib/db";
 import { signJWT } from "@/lib/auth";
 import { ensureDbSeeded } from "@/lib/db-seed";
+import { createAuditLog } from "@/lib/audit-helper";
 
 export async function POST(request: Request) {
   try {
@@ -44,6 +45,7 @@ export async function POST(request: Request) {
 
     if (dbUser) {
       if (dbUser.isArchived) {
+        await createAuditLog(request, { userId: dbUser.id, username }, "Failed Login Attempt", "AUTH", dbUser.id, username, "FAILURE", "Account archived");
         return NextResponse.json(
           { error: "Your account has been archived. Access denied." },
           { status: 403 }
@@ -56,6 +58,7 @@ export async function POST(request: Request) {
         where: { username },
       });
       if (!legacyAdmin) {
+        await createAuditLog(request, { userId: "", username }, "Failed Login Attempt", "AUTH", null, username, "FAILURE", "Username not found");
         return NextResponse.json(
           { error: "Invalid username or password" },
           { status: 401 }
@@ -68,6 +71,8 @@ export async function POST(request: Request) {
     // Verify password
     const isPasswordValid = await bcrypt.compare(password, targetUserPassword);
     if (!isPasswordValid) {
+      const targetId = dbUser ? dbUser.id : null;
+      await createAuditLog(request, { userId: targetId || "", username }, "Failed Login Attempt", "AUTH", targetId, username, "FAILURE", "Password mismatch");
       return NextResponse.json(
         { error: "Invalid username or password" },
         { status: 401 }
@@ -95,6 +100,10 @@ export async function POST(request: Request) {
     };
     const token = await signJWT(payload);
 
+    // Create Audit Log
+    const targetId = dbUser ? dbUser.id : "admin-legacy";
+    await createAuditLog(request, { userId: targetId, username }, "Logged In", "AUTH", targetId, username);
+
     // Set cookie response
     const response = NextResponse.json(
       { success: true, message: "Logged in successfully" },
@@ -108,15 +117,11 @@ export async function POST(request: Request) {
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
       maxAge: 60 * 60 * 6, // 6 hours
-      path: "/",
     });
 
     return response;
   } catch (error) {
-    console.error("Login API Error:", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 }
-    );
+    console.error("POST Login Error:", error);
+    return NextResponse.json({ error: "An unexpected error occurred during login" }, { status: 500 });
   }
 }

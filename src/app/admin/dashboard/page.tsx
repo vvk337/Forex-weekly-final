@@ -75,7 +75,7 @@ export default function AdminDashboardPage() {
   const [savingTicker, setSavingTicker] = useState(false);
   const [tickerMessage, setTickerMessage] = useState("");
 
-  const [activeTab, setActiveTab] = useState<"dashboard" | "articles" | "sponsors" | "inbox" | "ticker" | "users" | "reports">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "articles" | "sponsors" | "inbox" | "ticker" | "users" | "reports" | "audit-logs">("dashboard");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -108,14 +108,80 @@ export default function AdminDashboardPage() {
   const [activeRevisionArticleId, setActiveRevisionArticleId] = useState<string | null>(null);
   const [scheduleDateInput, setScheduleDateInput] = useState("");
   const [activeScheduleArticleId, setActiveScheduleArticleId] = useState<string | null>(null);
+  const [articleTimelineLogs, setArticleTimelineLogs] = useState<Record<string, any[]>>({});
 
-  // Article filter inputs
+  const toggleExpandArticle = async (id: string | null) => {
+    if (!id) {
+      setExpandedArticleId(null);
+      return;
+    }
+    setExpandedArticleId(id);
+    try {
+      const res = await fetch(`/api/audit-logs?objectId=${id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setArticleTimelineLogs((prev) => ({ ...prev, [id]: data }));
+      }
+    } catch (e) {
+      console.error("Failed to fetch article timeline logs", e);
+    }
+  };
+
+  const [expandedSponsorId, setExpandedSponsorId] = useState<string | null>(null);
+  const [sponsorTimelineLogs, setSponsorTimelineLogs] = useState<Record<string, any[]>>({});
+
+  const toggleExpandSponsor = async (id: string | null) => {
+    if (!id) {
+      setExpandedSponsorId(null);
+      return;
+    }
+    setExpandedSponsorId(id);
+    try {
+      const res = await fetch(`/api/audit-logs?objectId=${id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSponsorTimelineLogs((prev) => ({ ...prev, [id]: data }));
+      }
+    } catch (e) {
+      console.error("Failed to fetch sponsor timeline logs", e);
+    }
+  };
   const [articleAuthorFilter, setArticleAuthorFilter] = useState("");
   const [articleDeptFilter, setArticleDeptFilter] = useState("");
   const [articleSearchQuery, setArticleSearchQuery] = useState("");
   const [articleDateStart, setArticleDateStart] = useState("");
   const [articleDateEnd, setArticleDateEnd] = useState("");
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [auditUserQuery, setAuditUserQuery] = useState("");
+  const [auditModuleFilter, setAuditModuleFilter] = useState("");
+  const [auditActionFilter, setAuditActionFilter] = useState("");
+  const [auditDateStart, setAuditDateStart] = useState("");
+  const [auditDateEnd, setAuditDateEnd] = useState("");
 
+  const fetchAuditLogs = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (auditUserQuery) params.set("user", auditUserQuery);
+      if (auditModuleFilter) params.set("module", auditModuleFilter);
+      if (auditActionFilter) params.set("action", auditActionFilter);
+      if (auditDateStart) params.set("dateStart", auditDateStart);
+      if (auditDateEnd) params.set("dateEnd", auditDateEnd);
+
+      const res = await fetch(`/api/audit-logs?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setAuditLogs(data);
+      }
+    } catch (e) {
+      console.error("Failed to fetch global audit logs", e);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "audit-logs") {
+      fetchAuditLogs();
+    }
+  }, [activeTab, auditUserQuery, auditModuleFilter, auditActionFilter, auditDateStart, auditDateEnd]);
   useEffect(() => {
     fetch("/api/users/me")
       .then((res) => {
@@ -137,7 +203,7 @@ export default function AdminDashboardPage() {
     if (!currentUser) return [];
 
     const role = currentUser.role;
-    const links: Array<{ id: "dashboard" | "articles" | "sponsors" | "inbox" | "ticker" | "users" | "reports"; label: string; icon: React.ReactNode }> = [
+    const links: Array<{ id: "dashboard" | "articles" | "sponsors" | "inbox" | "ticker" | "users" | "reports" | "audit-logs"; label: string; icon: React.ReactNode }> = [
       { 
         id: "dashboard", 
         label: "Dashboard", 
@@ -230,6 +296,16 @@ export default function AdminDashboardPage() {
             <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
           </svg>
         ) 
+      });
+      links.push({
+        id: "audit-logs",
+        label: "Audit Logs",
+        icon: (
+          <svg className="w-4 h-4 mr-2.5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+        )
       });
     }
 
@@ -904,7 +980,7 @@ export default function AdminDashboardPage() {
                               className={`hover:bg-neutral-50/50 dark:hover:bg-neutral-900/20 transition-colors align-middle cursor-pointer ${
                                 isExpanded ? "bg-neutral-50/30 dark:bg-neutral-900/10" : ""
                               }`}
-                              onClick={() => setExpandedArticleId(isExpanded ? null : art.id)}
+                              onClick={() => toggleExpandArticle(isExpanded ? null : art.id)}
                             >
                               <td className="py-4 px-5 shrink-0 whitespace-nowrap">
                                 <span className={`text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 border rounded-sm ${getCategoryColor(art.category)}`}>
@@ -1133,6 +1209,36 @@ export default function AdminDashboardPage() {
                                     </div>
                                   </div>
 
+                                  {/* Article Timeline Logs */}
+                                  <div className="mt-5 border-t border-neutral-100 dark:border-neutral-800/85 pt-4">
+                                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-brand-red block mb-3">Article Timeline History</span>
+                                    {(!articleTimelineLogs[art.id] || articleTimelineLogs[art.id].length === 0) ? (
+                                      <div className="text-[11px] italic text-neutral-450">No timeline history recorded for this article.</div>
+                                    ) : (
+                                      <div className="border border-neutral-150 dark:border-neutral-850 rounded divide-y divide-neutral-100 dark:divide-neutral-850 max-h-48 overflow-y-auto font-medium">
+                                        {articleTimelineLogs[art.id].map((log) => (
+                                          <div key={log.id} className="p-3 text-[11.5px] flex flex-col sm:flex-row sm:justify-between gap-1.5 hover:bg-neutral-50/50 dark:hover:bg-neutral-900/10 transition-colors">
+                                            <div>
+                                              <span className="font-bold text-neutral-800 dark:text-neutral-200 uppercase tracking-wide">
+                                                {log.action}
+                                              </span>
+                                              {log.details && (
+                                                <span className="text-neutral-455 ml-2 font-semibold">
+                                                  &ldquo;{log.details}&rdquo;
+                                                </span>
+                                              )}
+                                            </div>
+                                            <div className="shrink-0 flex items-center space-x-2 text-neutral-400 font-mono text-[9.5px] self-start sm:self-auto">
+                                              <span>{new Date(log.timestamp).toLocaleString()}</span>
+                                              <span>&bull;</span>
+                                              <span className="font-bold uppercase">{log.username}</span>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+
                                   {/* Return for Revision Modal Panel */}
                                   {activeRevisionArticleId === art.id && (
                                     <div className="mt-4 p-4 border border-amber-500/30 bg-amber-500/5 rounded space-y-3">
@@ -1228,43 +1334,80 @@ export default function AdminDashboardPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100 dark:divide-neutral-850 font-medium">
-                  {sponsors.map((spo) => (
-                    <tr
-                      key={spo.id}
-                      className="hover:bg-neutral-50/50 dark:hover:bg-neutral-900/20 transition-colors"
-                    >
-                      <td className="py-4 px-5 shrink-0 whitespace-nowrap font-mono text-[10.5px] uppercase font-bold text-neutral-400">
-                        {spo.id.toUpperCase()}
-                      </td>
-                      <td className="py-4 px-5 text-neutral-900 dark:text-neutral-200 font-bold text-sm">
-                        {spo.title}
-                      </td>
-                      <td className="py-4 px-5 text-neutral-500 max-w-[150px] truncate">
-                        <a href={spo.linkUrl} target="_blank" rel="noopener noreferrer" className="hover:underline text-brand-red">
-                          {spo.linkUrl}
-                        </a>
-                      </td>
-                      <td className="py-4 px-5">
-                        {spo.imageUrl ? (
-                          <img
-                            src={spo.imageUrl}
-                            alt={spo.title}
-                            className="h-7 w-20 object-contain border border-neutral-100 dark:border-neutral-800 rounded p-0.5 bg-neutral-50 dark:bg-neutral-950"
-                          />
-                        ) : (
-                          <span className="text-[10px] text-neutral-400 italic">No media loaded</span>
-                        )}
-                      </td>
-                      <td className="py-4 px-5 text-right space-x-3.5 whitespace-nowrap">
-                        <Link
-                          href={`/admin/dashboard/sponsors/${spo.id}`}
-                          className="text-brand-red hover:text-brand-red-dark font-bold transition-colors"
+                  {sponsors.map((spo) => {
+                    const isExpanded = expandedSponsorId === spo.id;
+                    return (
+                      <React.Fragment key={spo.id}>
+                        <tr
+                          className={`hover:bg-neutral-50/50 dark:hover:bg-neutral-900/20 transition-colors cursor-pointer ${isExpanded ? "bg-neutral-50/30 dark:bg-neutral-900/10" : ""}`}
+                          onClick={() => toggleExpandSponsor(isExpanded ? null : spo.id)}
                         >
-                          Edit Spot Settings
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
+                          <td className="py-4 px-5 shrink-0 whitespace-nowrap font-mono text-[10.5px] uppercase font-bold text-neutral-400">
+                            {spo.id.toUpperCase()}
+                          </td>
+                          <td className="py-4 px-5 text-neutral-900 dark:text-neutral-200 font-bold text-sm">
+                            {spo.title}
+                          </td>
+                          <td className="py-4 px-5 text-neutral-500 max-w-[150px] truncate">
+                            <a href={spo.linkUrl} target="_blank" rel="noopener noreferrer" className="hover:underline text-brand-red" onClick={e => e.stopPropagation()}>
+                              {spo.linkUrl}
+                            </a>
+                          </td>
+                          <td className="py-4 px-5">
+                            {spo.imageUrl ? (
+                              <img
+                                src={spo.imageUrl}
+                                alt={spo.title}
+                                className="h-7 w-20 object-contain border border-neutral-100 dark:border-neutral-800 rounded p-0.5 bg-neutral-50 dark:bg-neutral-955"
+                              />
+                            ) : (
+                              <span className="text-[10px] text-neutral-400 italic">No media loaded</span>
+                            )}
+                          </td>
+                          <td className="py-4 px-5 text-right space-x-3.5 whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                            <Link
+                              href={`/admin/dashboard/sponsors/${spo.id}`}
+                              className="text-brand-red hover:text-brand-red-dark font-bold transition-colors"
+                            >
+                              Edit Spot Settings
+                            </Link>
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr>
+                            <td colSpan={5} className="bg-neutral-50/50 dark:bg-neutral-900/30 p-5 border-t border-b border-neutral-100 dark:border-neutral-850">
+                              <span className="text-[10px] font-extrabold uppercase tracking-widest text-brand-red block mb-3">Sponsor Activity Logs</span>
+                              {(!sponsorTimelineLogs[spo.id] || sponsorTimelineLogs[spo.id].length === 0) ? (
+                                <div className="text-[11px] italic text-neutral-455">No activity logged for this sponsor placement.</div>
+                              ) : (
+                                <div className="border border-neutral-150 dark:border-neutral-850 rounded divide-y divide-neutral-100 dark:divide-neutral-850 max-h-40 overflow-y-auto font-medium">
+                                  {sponsorTimelineLogs[spo.id].map((log) => (
+                                    <div key={log.id} className="p-3 text-[11px] flex justify-between items-center hover:bg-neutral-50/50 dark:hover:bg-neutral-900/10 transition-colors">
+                                      <div>
+                                        <span className="font-bold text-neutral-880 dark:text-neutral-200 uppercase tracking-wide">
+                                          {log.action}
+                                        </span>
+                                        {log.details && (
+                                          <span className="text-neutral-455 ml-2 font-semibold">
+                                            &ldquo;{log.details}&rdquo;
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="shrink-0 flex items-center space-x-2 text-neutral-400 font-mono text-[9.5px]">
+                                        <span>{new Date(log.timestamp).toLocaleString()}</span>
+                                        <span>&bull;</span>
+                                        <span className="font-bold uppercase">{log.username}</span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1719,6 +1862,159 @@ export default function AdminDashboardPage() {
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+          </div>
+        );
+
+      case "audit-logs":
+        return (
+          <div className="space-y-6">
+            {/* Filters panel */}
+            <div className="bg-neutral-50 dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-5 space-y-4 transition-colors">
+              <span className="text-[10px] font-extrabold uppercase tracking-widest text-brand-red block">Search &amp; Filter Audit Logs</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3.5">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400">User</label>
+                  <input
+                    type="text"
+                    placeholder="Search username..."
+                    value={auditUserQuery}
+                    onChange={(e) => setAuditUserQuery(e.target.value)}
+                    className="w-full bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-855 rounded-sm px-2.5 py-1.5 text-xs text-brand-dark dark:text-neutral-205 focus:outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400">Module</label>
+                  <select
+                    value={auditModuleFilter}
+                    onChange={(e) => setAuditModuleFilter(e.target.value)}
+                    className="w-full bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-855 rounded-sm px-2 py-1.5 text-xs text-brand-dark dark:text-neutral-205 focus:outline-none cursor-pointer font-semibold"
+                  >
+                    <option value="">All Modules</option>
+                    <option value="AUTH">AUTH (Sessions)</option>
+                    <option value="ARTICLE">ARTICLE (Publications)</option>
+                    <option value="USER">USER (Profiles)</option>
+                    <option value="SPONSOR">SPONSOR (Ads)</option>
+                    <option value="BREAKING_NEWS">BREAKING_NEWS</option>
+                    <option value="SYSTEM">SYSTEM (Settings)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400">Action</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Logged In, Created..."
+                    value={auditActionFilter}
+                    onChange={(e) => setAuditActionFilter(e.target.value)}
+                    className="w-full bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-855 rounded-sm px-2.5 py-1.5 text-xs text-brand-dark dark:text-neutral-205 focus:outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400">Start Date</label>
+                  <input
+                    type="date"
+                    value={auditDateStart}
+                    onChange={(e) => setAuditDateStart(e.target.value)}
+                    className="w-full bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-855 rounded-sm px-2 py-1 text-xs text-brand-dark dark:text-neutral-205 focus:outline-none cursor-pointer"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-400">End Date</label>
+                  <input
+                    type="date"
+                    value={auditDateEnd}
+                    onChange={(e) => setAuditDateEnd(e.target.value)}
+                    className="w-full bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-855 rounded-sm px-2 py-1 text-xs text-brand-dark dark:text-neutral-205 focus:outline-none cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              {(auditUserQuery || auditModuleFilter || auditActionFilter || auditDateStart || auditDateEnd) && (
+                <div className="flex justify-end pt-2">
+                  <button
+                    onClick={() => {
+                      setAuditUserQuery("");
+                      setAuditModuleFilter("");
+                      setAuditActionFilter("");
+                      setAuditDateStart("");
+                      setAuditDateEnd("");
+                    }}
+                    className="px-3.5 py-1.5 bg-neutral-200 hover:bg-neutral-300 dark:bg-neutral-800 dark:hover:bg-neutral-750 text-neutral-700 dark:text-neutral-300 text-[10.5px] font-bold uppercase tracking-wider rounded-sm transition-colors cursor-pointer"
+                  >
+                    Clear Filter
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Audit Logs Table */}
+            {auditLogs.length === 0 ? (
+              <div className="text-center py-16 border border-dashed border-neutral-200 dark:border-neutral-800 rounded text-neutral-400 text-xs uppercase font-bold tracking-widest">
+                No audit activity history logs found.
+              </div>
+            ) : (
+              <div className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-neutral-100 dark:border-neutral-855 text-[10px] uppercase font-bold tracking-wider text-neutral-400 dark:text-neutral-500 bg-neutral-50 dark:bg-neutral-900/50">
+                        <th className="py-3 px-5">Timestamp</th>
+                        <th className="py-3 px-5">User</th>
+                        <th className="py-3 px-5">Action</th>
+                        <th className="py-3 px-5">Module</th>
+                        <th className="py-3 px-5">Object Name / ID</th>
+                        <th className="py-3 px-5">Result</th>
+                        <th className="py-3 px-5">IP Address</th>
+                        <th className="py-3 px-5">Details</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-100 dark:divide-neutral-850 font-medium">
+                      {auditLogs.map((log) => (
+                        <tr key={log.id} className="hover:bg-neutral-50/50 dark:hover:bg-neutral-900/20 transition-colors align-top">
+                          <td className="py-3.5 px-5 font-mono text-neutral-500 whitespace-nowrap">
+                            {new Date(log.timestamp).toLocaleString()}
+                          </td>
+                          <td className="py-3.5 px-5 font-bold text-neutral-900 dark:text-neutral-200">
+                            @{log.username}
+                          </td>
+                          <td className="py-3.5 px-5">
+                            <span className="font-extrabold text-[11px] uppercase tracking-wide">
+                              {log.action}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-5 shrink-0 whitespace-nowrap">
+                            <span className="text-[9px] font-extrabold uppercase tracking-widest px-1.5 py-0.5 bg-neutral-100 dark:bg-neutral-900 text-neutral-500 border border-neutral-200 dark:border-neutral-850 rounded-sm">
+                              {log.module}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-5 max-w-[140px] truncate text-neutral-550 dark:text-neutral-400">
+                            {log.objectName || log.objectId || "N/A"}
+                          </td>
+                          <td className="py-3.5 px-5 shrink-0 whitespace-nowrap">
+                            <span className={`text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 border rounded-sm ${
+                              log.result === "SUCCESS"
+                                ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                                : "bg-rose-500/10 text-rose-500 border-rose-500/20"
+                            }`}>
+                              {log.result}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-5 font-mono text-neutral-500 text-[10px]">
+                            {log.ipAddress || "SYSTEM"}
+                          </td>
+                          <td className="py-3.5 px-5 text-neutral-500 dark:text-neutral-450 leading-relaxed text-[11px] font-semibold max-w-xs">
+                            {log.details || "-"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </div>

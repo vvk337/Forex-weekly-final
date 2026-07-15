@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import prisma from "@/lib/db";
 import { validatePermissions } from "@/lib/auth-helpers";
+import { createAuditLog } from "@/lib/audit-helper";
 
 // GET List Users (relational mapping)
 export async function GET(request: Request) {
@@ -200,6 +201,15 @@ export async function POST(request: Request) {
         role: true,
       },
     });
+
+    await createAuditLog(
+      request,
+      session,
+      "User Created",
+      "SYSTEM",
+      newUser.id,
+      newUser.username
+    );
 
     return NextResponse.json(
       {

@@ -20,6 +20,9 @@ interface DbUser {
   isArchived: boolean;
   activeSince: string;
   createdBy: string;
+  lastLogin: string | null;
+  lastActivity: string | null;
+  isOnline: boolean;
 }
 
 interface UserEditPageProps {
@@ -60,6 +63,18 @@ export default function UserEditPage({ params }: UserEditPageProps) {
   const [actingUpdating, setActingUpdating] = useState(false);
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+  const [activityLogs, setActivityLogs] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch(`/api/audit-logs?objectId=${id}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setActivityLogs(data);
+        }
+      })
+      .catch((err) => console.error("Error fetching user activity logs:", err));
+  }, [id]);
 
   useEffect(() => {
     // 1. Fetch current logged-in user profile
@@ -660,6 +675,93 @@ export default function UserEditPage({ params }: UserEditPageProps) {
               </div>
             </form>
           )}
+
+          {/* User Activity & Session Logs Panel */}
+          <div className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-6 space-y-5 transition-colors">
+            <h3 className="text-xs font-extrabold uppercase tracking-widest text-brand-red border-b border-neutral-100 dark:border-neutral-850 pb-2">
+              User Activity &amp; Session Logs
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Login metrics column */}
+              <div className="space-y-3.5 text-xs">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-neutral-400 block">Login &amp; Session Status</span>
+                <div>
+                  <span className="font-bold text-neutral-855 dark:text-neutral-300">Last Login:</span>{" "}
+                  {user?.lastLogin ? new Date(user.lastLogin).toLocaleString() : "Never logged in"}
+                </div>
+                <div>
+                  <span className="font-bold text-neutral-855 dark:text-neutral-300">Current Session:</span>{" "}
+                  {user?.isOnline ? (
+                    <span className="inline-flex items-center text-emerald-500 font-bold">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 mr-1.5 animate-pulse"></span>
+                      Online
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center text-neutral-450 font-bold">
+                      <span className="h-1.5 w-1.5 rounded-full bg-neutral-400 mr-1.5"></span>
+                      Offline
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <span className="font-bold text-neutral-855 dark:text-neutral-300">Failed Login Attempts:</span>{" "}
+                  <span className="font-semibold text-rose-500">
+                    {activityLogs.filter(x => x.action === "Failed Login Attempt").length}
+                  </span>
+                </div>
+              </div>
+
+              {/* Login History */}
+              <div className="space-y-2 text-xs">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-neutral-400 block">Previous Logins (Recent)</span>
+                {activityLogs.filter(x => x.action === "Logged In" && x.result === "SUCCESS").slice(0, 5).length === 0 ? (
+                  <div className="text-[10px] italic text-neutral-455">No login session records found.</div>
+                ) : (
+                  <ul className="space-y-1.5 font-mono text-[10px] text-neutral-500">
+                    {activityLogs.filter(x => x.action === "Logged In" && x.result === "SUCCESS").slice(0, 5).map((log) => (
+                      <li key={log.id} className="flex justify-between">
+                        <span>{new Date(log.timestamp).toLocaleString()}</span>
+                        <span className="text-[9px] uppercase font-bold text-neutral-400">{log.ipAddress || "no ip"}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+
+            {/* General Activity list */}
+            <div className="border-t border-neutral-100 dark:border-neutral-850 pt-4 space-y-3">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-neutral-400 block">Activity History Timeline</span>
+              {activityLogs.length === 0 ? (
+                <div className="text-center py-6 text-neutral-400 text-xs italic">
+                  No activity history events logged.
+                </div>
+              ) : (
+                <div className="border border-neutral-150 dark:border-neutral-855 rounded divide-y divide-neutral-100 dark:divide-neutral-850 max-h-60 overflow-y-auto font-medium">
+                  {activityLogs.map((log) => (
+                    <div key={log.id} className="p-3 text-xs flex flex-col sm:flex-row sm:justify-between gap-1.5 hover:bg-neutral-50/50 dark:hover:bg-neutral-900/10 transition-colors">
+                      <div>
+                        <span className="font-bold text-neutral-855 dark:text-neutral-200 uppercase tracking-wide text-[10.5px]">
+                          {log.action}
+                        </span>
+                        {log.details && (
+                          <span className="text-neutral-455 text-[11px] block mt-0.5 font-semibold">
+                            {log.details}
+                          </span>
+                        )}
+                      </div>
+                      <div className="shrink-0 flex items-center space-x-2 text-neutral-400 text-[10px] font-mono whitespace-nowrap self-start sm:self-auto">
+                        <span>{new Date(log.timestamp).toLocaleString()}</span>
+                        <span>&bull;</span>
+                        <span className="font-bold uppercase">{log.username}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
