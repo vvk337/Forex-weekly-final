@@ -6,6 +6,9 @@ export async function middleware(request: NextRequest) {
   const token = request.cookies.get("admin_token")?.value;
   const { pathname } = request.nextUrl;
 
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-pathname", pathname);
+
   // Protect dashboard routes
   if (pathname.startsWith("/admin/dashboard")) {
     if (!token) {
@@ -31,9 +34,13 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  return NextResponse.next();
+  return NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    }
+  });
 }
 
 export const config = {
-  matcher: ["/admin/:path*"],
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|images).*)"],
 };

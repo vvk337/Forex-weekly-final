@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Playfair_Display } from "next/font/google";
+import { headers } from "next/headers";
 import "./globals.css";
 
 import TopBar from "@/components/layout/TopBar";
@@ -29,17 +30,34 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const headersList = await headers();
+  const pathname = headersList.get("x-pathname") || "";
+  const isAdmin = pathname.startsWith("/admin");
+
+  if (isAdmin) {
+    return (
+      <html
+        lang="en"
+        className={`${inter.variable} ${playfair.variable} h-full antialiased`}
+      >
+        <body className="h-full bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 transition-colors duration-300">
+          {children}
+        </body>
+      </html>
+    );
+  }
+
   return (
     <html
       lang="en"
       className={`${inter.variable} ${playfair.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-white dark:bg-brand-dark text-brand-dark dark:text-neutral-200 transition-colors duration-300">
+      <body className="min-h-full flex flex-col bg-white dark:bg-brand-dark text-brand-dark dark:text-neutral-205 transition-colors duration-300">
         <TopBar />
         <Header />
         <Navbar />

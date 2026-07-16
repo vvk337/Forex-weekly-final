@@ -103,11 +103,26 @@ export async function validatePermissions(
     const adminPermissions = [
       "users:manage",
       "users:view",
+      "users:manage:dept",
       "workspaces:view",
       "articles:view",
+      "articles:create",
+      "articles:edit:own",
+      "articles:submit",
+      "articles:approve",
+      "articles:edit:published",
+      "articles:publish",
+      "articles:delete",
+      "breaking-news:create",
+      "breaking-news:manage",
+      "sponsors:manage:workspace",
       "sponsors:view",
+      "sponsors:manage",
       "inbox:view",
       "reports:view",
+      "dashboard:view",
+      "profile:edit",
+      "messaging:use",
     ];
     isAuthorized = adminPermissions.includes(permission);
   } else if (activeRole === "SUPERVISOR") {

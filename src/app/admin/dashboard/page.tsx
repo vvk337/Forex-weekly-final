@@ -91,6 +91,17 @@ export default function AdminDashboardPage() {
   const [usersSort, setUsersSort] = useState("fullName");
   const [usersOrder, setUsersOrder] = useState<"asc" | "desc">("asc");
 
+  // Add User Form States
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [addUserFullName, setAddUserFullName] = useState("");
+  const [addUserUsername, setAddUserUsername] = useState("");
+  const [addUserEmail, setAddUserEmail] = useState("");
+  const [addUserRole, setAddUserRole] = useState("EMPLOYEE");
+  const [addUserDept, setAddUserDept] = useState("Publication");
+  const [addUserWorkspace, setAddUserWorkspace] = useState("Publication");
+  const [addUserPasswordMode, setAddUserPasswordMode] = useState<"invite" | "temp">("invite");
+  const [addUserTempPassword, setAddUserTempPassword] = useState("");
+
   // Load current user session
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [activeWorkspace, setActiveWorkspace] = useState<string>("Publication");
@@ -215,6 +226,23 @@ export default function AdminDashboardPage() {
   const [newAnnouncementMsg, setNewAnnouncementMsg] = useState("");
   const [newAnnouncementExpiry, setNewAnnouncementExpiry] = useState("");
   const [newAnnouncementPinned, setNewAnnouncementPinned] = useState(false);
+
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const val = localStorage.getItem("sidebar-collapsed");
+      if (val === "true") {
+        setSidebarCollapsed(true);
+      }
+    }
+  }, []);
+
+  const toggleSidebarCollapse = () => {
+    const next = !sidebarCollapsed;
+    setSidebarCollapsed(next);
+    localStorage.setItem("sidebar-collapsed", String(next));
+  };
 
   const fetchNotifications = async () => {
     try {
@@ -969,6 +997,55 @@ export default function AdminDashboardPage() {
     e.preventDefault();
     setUsersPage(1);
     fetchData();
+  };
+
+  const handleAddUserSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (addUserFullName.trim() === "" || addUserUsername.trim() === "" || addUserEmail.trim() === "") return;
+    
+    const finalPassword = addUserPasswordMode === "invite" 
+      ? Math.random().toString(36).slice(-10) + "Temp1$" 
+      : addUserTempPassword;
+
+    if (addUserPasswordMode === "temp" && addUserTempPassword.trim() === "") {
+      alert("Please provide a temporary password");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullName: addUserFullName,
+          username: addUserUsername,
+          email: addUserEmail,
+          password: finalPassword,
+          role: addUserRole,
+          departments: [addUserDept],
+          workspaces: [addUserWorkspace],
+          forcePasswordChange: true,
+        }),
+      });
+
+      if (res.ok) {
+        setAddUserFullName("");
+        setAddUserUsername("");
+        setAddUserEmail("");
+        setAddUserTempPassword("");
+        setShowAddUserModal(false);
+        fetchData(); // Reload user directory list
+        alert(addUserPasswordMode === "invite" 
+          ? `User invited successfully! Temporary password generated: ${finalPassword}`
+          : "User account created successfully!"
+        );
+      } else {
+        const err = await res.json();
+        alert(err.error || "Failed to create user account");
+      }
+    } catch (e) {
+      console.error("Failed to create user", e);
+    }
   };
 
   const getCategoryColor = (cat: string) => {
@@ -2015,9 +2092,9 @@ export default function AdminDashboardPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
           </div>
-        );
+        </div>
+      );
 
       case "users":
         return (
@@ -2029,7 +2106,7 @@ export default function AdminDashboardPage() {
                   placeholder="Search users by name, username, or email..."
                   value={usersSearch}
                   onChange={(e) => setUsersSearch(e.target.value)}
-                  className="flex-grow bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-855 text-brand-dark dark:text-neutral-205 rounded-sm px-3.5 py-1.5 text-xs focus:outline-none focus:border-brand-red transition-all"
+                  className="flex-grow bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-855 text-brand-dark dark:text-neutral-205 rounded-sm px-3.5 py-1.5 text-xs focus:outline-none focus:border-brand-red transition-all font-semibold"
                 />
                 <button
                   type="submit"
@@ -2096,6 +2173,15 @@ export default function AdminDashboardPage() {
                   <option value="role-asc">Sort: Role A-Z</option>
                   <option value="activeSince-desc">Sort: Date Joined</option>
                 </select>
+
+                {(currentUser?.role === "OWNER" || currentUser?.role === "ADMIN") && (
+                  <button
+                    onClick={() => setShowAddUserModal(true)}
+                    className="bg-brand-red hover:bg-brand-red-dark text-white text-xs font-bold uppercase tracking-wider px-4 py-1.5 rounded-sm transition-colors cursor-pointer"
+                  >
+                    Add User
+                  </button>
+                )}
               </div>
             </div>
 
@@ -2138,16 +2224,16 @@ export default function AdminDashboardPage() {
                             <div className="font-bold text-neutral-900 dark:text-neutral-200 text-sm">
                               {u.fullName}
                             </div>
-                            <div className="text-[10.5px] text-neutral-450 mt-0.5 font-mono">
+                            <div className="text-[10.5px] text-neutral-455 mt-0.5 font-mono">
                               @{u.username} &bull; {u.email}
                             </div>
                           </td>
                           <td className="py-3.5 px-5 shrink-0 whitespace-nowrap">
                             <span className={`text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 border rounded-sm ${
                               u.role === "OWNER"
-                                ? "bg-red-500/10 text-red-600 border-red-500/20"
+                                ? "bg-red-500/10 text-red-650 border-red-500/20"
                                 : u.role === "ADMIN"
-                                ? "bg-blue-500/10 text-blue-600 border-blue-500/20"
+                                ? "bg-blue-500/10 text-blue-650 border-blue-500/20"
                                 : u.role === "SUPERVISOR"
                                 ? "bg-purple-500/10 text-purple-650 border-purple-500/20"
                                 : "bg-neutral-100 text-neutral-600 border-neutral-200 dark:bg-neutral-900/50 dark:text-neutral-400 dark:border-neutral-855"
@@ -2159,10 +2245,10 @@ export default function AdminDashboardPage() {
                             <div className="flex items-center space-x-1.5">
                               <span className={`h-1.5 w-1.5 rounded-full ${
                                 u.status === "ACTIVE"
-                                  ? "bg-emerald-500"
+                                  ? "bg-emerald-505"
                                   : u.status === "SUSPENDED"
-                                  ? "bg-rose-500"
-                                  : "bg-neutral-500"
+                                  ? "bg-rose-505"
+                                  : "bg-neutral-505"
                               }`}></span>
                               <span className="text-xs uppercase font-extrabold tracking-wide text-neutral-600 dark:text-neutral-400">
                                 {u.status}
@@ -2197,7 +2283,7 @@ export default function AdminDashboardPage() {
                             </Link>
                             <button
                               onClick={() => handleArchiveToggle(u.id, u.isArchived)}
-                              className="text-neutral-505 hover:text-red-600 font-bold transition-colors cursor-pointer"
+                              className="text-neutral-505 hover:text-red-650 font-bold transition-colors cursor-pointer"
                             >
                               {u.isArchived ? "Restore" : "Archive"}
                             </button>
@@ -2231,6 +2317,145 @@ export default function AdminDashboardPage() {
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Add User Modal Overlay */}
+            {showAddUserModal && (
+              <div className="fixed inset-0 bg-neutral-955/40 z-50 flex items-center justify-center p-4">
+                <form onSubmit={handleAddUserSubmit} className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 w-full max-w-md rounded shadow-lg overflow-hidden animate-fadeInFast flex flex-col max-h-[550px]">
+                  <div className="p-4 border-b border-neutral-105 dark:border-neutral-850 flex justify-between items-center bg-neutral-50 dark:bg-neutral-900/50">
+                    <span className="font-serif font-bold text-xs uppercase text-brand-red tracking-wider">Invite / Create User</span>
+                    <button type="button" onClick={() => setShowAddUserModal(false)} className="text-neutral-405 hover:text-neutral-800">
+                      <svg className="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="p-4 space-y-4 flex-grow overflow-y-auto">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-extrabold uppercase tracking-widest text-neutral-450 dark:text-neutral-500">Full Name</label>
+                      <input
+                        type="text"
+                        required
+                        value={addUserFullName}
+                        onChange={e => setAddUserFullName(e.target.value)}
+                        placeholder="e.g. John Doe"
+                        className="w-full bg-neutral-50/50 dark:bg-neutral-955 border border-neutral-200 dark:border-neutral-800 text-xs rounded px-3 py-2 focus:outline-none"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-extrabold uppercase tracking-widest text-neutral-450 dark:text-neutral-500">Username</label>
+                      <input
+                        type="text"
+                        required
+                        value={addUserUsername}
+                        onChange={e => setAddUserUsername(e.target.value)}
+                        placeholder="e.g. johndoe"
+                        className="w-full bg-neutral-50/50 dark:bg-neutral-955 border border-neutral-200 dark:border-neutral-800 text-xs rounded px-3 py-2 focus:outline-none"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-extrabold uppercase tracking-widest text-neutral-450 dark:text-neutral-500">Email Address</label>
+                      <input
+                        type="email"
+                        required
+                        value={addUserEmail}
+                        onChange={e => setAddUserEmail(e.target.value)}
+                        placeholder="e.g. johndoe@forexweekly.com"
+                        className="w-full bg-neutral-50/50 dark:bg-neutral-955 border border-neutral-200 dark:border-neutral-800 text-xs rounded px-3 py-2 focus:outline-none"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-extrabold uppercase tracking-widest text-neutral-450 dark:text-neutral-500">Role</label>
+                        <select
+                          value={addUserRole}
+                          onChange={e => setAddUserRole(e.target.value)}
+                          className="w-full bg-neutral-50/50 dark:bg-neutral-955 border border-neutral-200 dark:border-neutral-800 text-xs rounded px-3 py-2 focus:outline-none"
+                        >
+                          <option value="EMPLOYEE">Employee</option>
+                          <option value="SUPERVISOR">Supervisor</option>
+                          <option value="ADMIN">Admin</option>
+                          {currentUser?.role === "OWNER" && <option value="OWNER">Owner</option>}
+                        </select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-extrabold uppercase tracking-widest text-neutral-450 dark:text-neutral-500">Department</label>
+                        <select
+                          value={addUserDept}
+                          onChange={e => setAddUserDept(e.target.value)}
+                          className="w-full bg-neutral-50/50 dark:bg-neutral-955 border border-neutral-200 dark:border-neutral-800 text-xs rounded px-3 py-2 focus:outline-none"
+                        >
+                          <option value="Publication">Publication</option>
+                          <option value="Marketing">Marketing</option>
+                          <option value="Research">Research</option>
+                          <option value="Support">Support</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-extrabold uppercase tracking-widest text-neutral-450 dark:text-neutral-500">Workspace</label>
+                      <select
+                        value={addUserWorkspace}
+                        onChange={e => setAddUserWorkspace(e.target.value)}
+                        className="w-full bg-neutral-50/50 dark:bg-neutral-955 border border-neutral-200 dark:border-neutral-800 text-xs rounded px-3 py-2 focus:outline-none"
+                      >
+                        <option value="Publication">Publication</option>
+                        <option value="Marketing">Marketing</option>
+                        <option value="Research">Research</option>
+                      </select>
+                    </div>
+
+                    <div className="border-t border-neutral-100 dark:border-neutral-850 pt-3 space-y-3">
+                      <label className="text-[10px] font-extrabold uppercase tracking-widest text-neutral-450 dark:text-neutral-500 block">Password Type</label>
+                      <div className="flex flex-col space-y-2 text-xs font-semibold">
+                        <label className="flex items-center space-x-2 cursor-pointer select-none">
+                          <input
+                            type="radio"
+                            checked={addUserPasswordMode === "invite"}
+                            onChange={() => setAddUserPasswordMode("invite")}
+                            className="text-brand-red focus:ring-brand-red h-4 w-4"
+                          />
+                          <span>Send Invitation (Auto Temp Password)</span>
+                        </label>
+                        <label className="flex items-center space-x-2 cursor-pointer select-none">
+                          <input
+                            type="radio"
+                            checked={addUserPasswordMode === "temp"}
+                            onChange={() => setAddUserPasswordMode("temp")}
+                            className="text-brand-red focus:ring-brand-red h-4 w-4"
+                          />
+                          <span>Create Temporary Password</span>
+                        </label>
+                      </div>
+
+                      {addUserPasswordMode === "temp" && (
+                        <div className="space-y-1.5 pt-1 animate-fadeInFast">
+                          <label className="text-[10px] font-extrabold uppercase tracking-widest text-neutral-450 dark:text-neutral-500">Temporary Password</label>
+                          <input
+                            type="text"
+                            required={addUserPasswordMode === "temp"}
+                            value={addUserTempPassword}
+                            onChange={e => setAddUserTempPassword(e.target.value)}
+                            placeholder="Type temp password..."
+                            className="w-full bg-neutral-50/50 dark:bg-neutral-955 border border-neutral-200 dark:border-neutral-800 text-xs rounded px-3 py-2 focus:outline-none font-semibold"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="p-4 border-t border-neutral-100 dark:border-neutral-850 bg-neutral-50 dark:bg-neutral-900/50 flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={addUserFullName.trim() === "" || addUserUsername.trim() === "" || addUserEmail.trim() === ""}
+                      className="bg-brand-red hover:bg-brand-red-dark text-white text-xs font-bold uppercase tracking-wider px-6 py-2.5 rounded-sm transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      {addUserPasswordMode === "invite" ? "Send Invite" : "Create User"}
+                    </button>
+                  </div>
+                </form>
               </div>
             )}
           </div>
@@ -2422,9 +2647,20 @@ export default function AdminDashboardPage() {
 
               {/* DM conversations list */}
               <div className="flex-1 overflow-y-auto divide-y divide-neutral-100 dark:divide-neutral-850">
-                {dmConversations
-                  .filter(c => c.type === "DIRECT" && c.displayName.toLowerCase().includes(dmSearchQuery.toLowerCase()))
-                  .map(c => {
+                {dmConversations.filter(c => c.type === "DIRECT" && c.displayName.toLowerCase().includes(dmSearchQuery.toLowerCase())).length === 0 ? (
+                  <div className="p-6 text-center text-xs text-neutral-400">
+                    <p className="font-bold uppercase tracking-widest mb-3">No conversations yet.</p>
+                    <button
+                      onClick={() => setShowNewDmModal(true)}
+                      className="px-3 py-1.5 bg-brand-red hover:bg-brand-red-dark text-white text-[10px] font-bold uppercase tracking-wider rounded-sm transition-colors cursor-pointer"
+                    >
+                      New DM
+                    </button>
+                  </div>
+                ) : (
+                  dmConversations
+                    .filter(c => c.type === "DIRECT" && c.displayName.toLowerCase().includes(dmSearchQuery.toLowerCase()))
+                    .map(c => {
                     const isSelected = selectedDmConv?.id === c.id;
                     const isArchived = JSON.parse(c.archivedByUsernames || "[]").includes(currentUser?.username);
                     return (
@@ -2484,7 +2720,8 @@ export default function AdminDashboardPage() {
                         </div>
                       </div>
                     );
-                  })}
+                  })
+                )}
               </div>
             </div>
 
@@ -2678,7 +2915,23 @@ export default function AdminDashboardPage() {
               {/* Group Conversations List */}
               <div className="flex-1 overflow-y-auto divide-y divide-neutral-100 dark:divide-neutral-850">
                 {groups.length === 0 ? (
-                  <div className="p-6 text-center text-xs text-neutral-400 italic">No group chats found.</div>
+                  <div className="p-6 text-center text-xs text-neutral-400">
+                    <p className="font-bold uppercase tracking-widest mb-3">No group chats yet.</p>
+                    {isManager && (
+                      <button
+                        onClick={() => {
+                          setShowCreateGroupModal(true);
+                          fetch("/api/inbox/users?query=")
+                            .then(res => res.json())
+                            .then(data => setSearchResultsUsers(data))
+                            .catch(e => console.error(e));
+                        }}
+                        className="px-2.5 py-1.5 bg-brand-red hover:bg-brand-red-dark text-white text-[10px] font-bold uppercase tracking-wider rounded-sm transition-colors cursor-pointer"
+                      >
+                        Create Group
+                      </button>
+                    )}
+                  </div>
                 ) : (
                   groups.map(g => {
                     const isSelected = selectedGroup?.id === g.id;
@@ -3088,33 +3341,23 @@ export default function AdminDashboardPage() {
   const showWorkspaceDropdown = allowedWorkspaces.length > 1;
 
   return (
-    <div className="min-h-screen flex bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 transition-colors duration-300">
+    <div className="min-h-screen flex flex-col bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 transition-colors duration-300">
       
-      {/* 1. LEFT SIDEBAR */}
-      <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-white dark:bg-neutral-900 border-r border-neutral-200 dark:border-neutral-800 flex flex-col justify-between transform transition-transform duration-300 md:translate-x-0 ${showMobileSidebar ? "translate-x-0" : "-translate-x-full"}`}>
-        <div>
-          {/* Logo Brand Header */}
-          <div className="p-6 border-b border-neutral-100 dark:border-neutral-850 flex items-center justify-between">
-            <Link href="/admin/dashboard" className="flex items-center space-x-2.5">
-              <span className="h-6 w-6 rounded bg-brand-red flex items-center justify-center text-white font-extrabold text-sm">FW</span>
-              <span className="font-serif font-bold text-sm tracking-tight text-brand-dark dark:text-white">Weekly Control</span>
-            </Link>
-            <button onClick={() => setShowMobileSidebar(false)} className="md:hidden text-neutral-450 hover:text-neutral-800 cursor-pointer">
-              <svg className="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </button>
-          </div>
-
-          {/* Workspace Dropdown Selector */}
+      {/* Dedicate App Top Header */}
+      <header className="h-14 bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between px-6 z-50 transition-colors shrink-0">
+        <div className="flex items-center space-x-4">
+          <Link href="/admin/dashboard" className="flex items-center space-x-2.5">
+            <span className="h-6 w-6 rounded bg-brand-red flex items-center justify-center text-white font-extrabold text-sm">FW</span>
+            <span className="font-serif font-bold text-sm tracking-tight text-brand-dark dark:text-white">Weekly Control</span>
+          </Link>
+          
+          {/* Workspace selector in header */}
           {showWorkspaceDropdown && currentUser && (
-            <div className="px-6 py-4 border-b border-neutral-100 dark:border-neutral-850">
-              <label className="text-[9px] font-extrabold uppercase tracking-widest text-neutral-400 dark:text-neutral-500 block mb-1">Active Workspace</label>
+            <div className="flex items-center border-l border-neutral-200 dark:border-neutral-850 pl-4 h-6">
               <select
                 value={activeWorkspace}
                 onChange={(e) => setActiveWorkspace(e.target.value)}
-                className="w-full bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 text-xs font-bold py-1.5 px-2.5 rounded text-brand-dark dark:text-neutral-200 focus:outline-none cursor-pointer"
+                className="bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 text-xs font-bold py-1 px-2.5 rounded text-brand-dark dark:text-neutral-200 focus:outline-none cursor-pointer"
               >
                 {allowedWorkspaces.map((ws: string) => (
                   <option key={ws} value={ws} className="bg-white dark:bg-neutral-955 text-neutral-205">
@@ -3124,338 +3367,337 @@ export default function AdminDashboardPage() {
               </select>
             </div>
           )}
+        </div>
 
-          {/* Navigation Links list */}
-          <nav className="p-4 space-y-1">
-            {visibleTabs.filter(link => link.id !== "inbox").map((link) => (
-              <button
-                key={link.id}
-                onClick={() => {
-                  setActiveTab(link.id);
-                  setShowMobileSidebar(false);
-                }}
-                className={`w-full flex items-center px-3 py-2 rounded-sm text-xs font-bold transition-all text-left cursor-pointer ${
-                  activeTab === link.id
-                    ? "bg-brand-red text-white"
-                    : "text-neutral-550 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-850"
-                }`}
-              >
-                {link.icon}
-                <span>{link.label}</span>
-              </button>
-            ))}
-
-            {/* Inbox Section */}
-            <div className="pt-4 pb-1">
-              <span className="px-3 text-[9px] font-extrabold uppercase tracking-widest text-neutral-400 dark:text-neutral-500 block">
-                Inbox
-              </span>
+        <div className="flex items-center space-x-4">
+          {/* Global Search */}
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg className="w-3.5 h-3.5 text-neutral-400 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
             </div>
+            <input
+              type="text"
+              placeholder="Search console..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="bg-neutral-50 dark:bg-neutral-955 border border-neutral-200 dark:border-neutral-800 text-xs rounded-sm pl-9 pr-4 py-1.5 w-40 sm:w-56 focus:outline-none focus:border-brand-red focus:w-64 transition-all text-neutral-800 dark:text-neutral-200 font-semibold"
+            />
 
-            <button
-              onClick={() => {
-                setActiveTab("inbox-dm");
-                setShowMobileSidebar(false);
-              }}
-              className={`w-full flex items-center px-3 py-2 rounded-sm text-xs font-bold transition-all text-left cursor-pointer ${
-                activeTab === "inbox-dm"
-                  ? "bg-brand-red text-white"
-                  : "text-neutral-550 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-850"
-              }`}
-            >
-              <svg className="w-4 h-4 mr-2.5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-              </svg>
-              <span>Direct Messages</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setActiveTab("inbox-groups");
-                setShowMobileSidebar(false);
-              }}
-              className={`w-full flex items-center px-3 py-2 rounded-sm text-xs font-bold transition-all text-left cursor-pointer ${
-                activeTab === "inbox-groups"
-                  ? "bg-brand-red text-white"
-                  : "text-neutral-550 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-850"
-              }`}
-            >
-              <svg className="w-4 h-4 mr-2.5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                <circle cx="9" cy="7" r="4"></circle>
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-              </svg>
-              <span>Groups</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setActiveTab("inbox-announcements");
-                setShowMobileSidebar(false);
-              }}
-              className={`w-full flex items-center px-3 py-2 rounded-sm text-xs font-bold transition-all text-left cursor-pointer ${
-                activeTab === "inbox-announcements"
-                  ? "bg-brand-red text-white"
-                  : "text-neutral-550 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-850"
-              }`}
-            >
-              <svg className="w-4 h-4 mr-2.5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
-                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-                <line x1="12" y1="9" x2="12" y2="13"></line>
-                <line x1="12" y1="17" x2="12.01" y2="17"></line>
-              </svg>
-              <span>Announcements</span>
-            </button>
-
-            {visibleTabs.some(link => link.id === "inbox") && (
-              <button
-                onClick={() => {
-                  setActiveTab("inbox");
-                  setShowMobileSidebar(false);
-                }}
-                className={`w-full flex items-center px-3 py-2 rounded-sm text-xs font-bold transition-all text-left cursor-pointer ${
-                  activeTab === "inbox"
-                    ? "bg-brand-red text-white"
-                    : "text-neutral-550 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-850"
-                }`}
-              >
-                <svg className="w-4 h-4 mr-2.5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
-                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-                  <polyline points="22,6 12,13 2,6"></polyline>
-                </svg>
-                <span>Public Inquiries</span>
-              </button>
+            {/* Search popover */}
+            {searchResults.length > 0 && (
+              <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-neutral-900 border border-neutral-250 dark:border-neutral-800 rounded shadow-lg z-50 max-h-80 overflow-y-auto divide-y divide-neutral-100 dark:divide-neutral-850">
+                {searchResults.map((res, i) => (
+                  <button
+                    key={i}
+                    onClick={res.action}
+                    className="w-full text-left px-4 py-2.5 hover:bg-neutral-50 dark:hover:bg-neutral-850 flex flex-col transition-colors cursor-pointer font-semibold"
+                  >
+                    <div className="flex justify-between items-center w-full">
+                      <span className="font-bold text-neutral-800 dark:text-neutral-200 text-xs">{res.title}</span>
+                      <span className="text-[8px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded bg-brand-red/10 text-brand-red border border-brand-red/15">{res.type}</span>
+                    </div>
+                    <span className="text-[10px] text-neutral-455 mt-0.5 truncate">{res.sub}</span>
+                  </button>
+                ))}
+              </div>
             )}
-          </nav>
-        </div>
+          </div>
 
-        {/* Footer Profile card */}
-        {currentUser && (
-          <div className="p-4 border-t border-neutral-100 dark:border-neutral-850 flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <img
-                src={currentUser.profilePhoto || "/images/default-avatar.png"}
-                alt={currentUser.fullName}
-                className="h-8 w-8 rounded-full object-cover border border-neutral-200 dark:border-neutral-800"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = "/images/default-avatar.png";
-                }}
-              />
-              <div className="min-w-0">
-                <div className="text-xs font-bold text-neutral-800 dark:text-neutral-200 truncate">{currentUser.fullName}</div>
-                <div className="text-[10px] text-neutral-450 font-mono truncate">@{currentUser.username}</div>
-              </div>
-            </div>
-            <button onClick={() => setShowProfileMenu(!showProfileMenu)} className="text-neutral-450 hover:text-neutral-800 cursor-pointer">
-              <svg className="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="1"></circle>
-                <circle cx="12" cy="5" r="1"></circle>
-                <circle cx="12" cy="19" r="1"></circle>
+          {/* Notification Bell */}
+          <div className="relative">
+            <button
+              onClick={() => setShowNotificationMenu(!showNotificationMenu)}
+              className="p-1.5 text-neutral-455 hover:text-brand-red dark:text-neutral-400 dark:hover:text-white rounded-full transition-colors relative cursor-pointer"
+            >
+              <svg className="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
               </svg>
-            </button>
-          </div>
-        )}
-      </aside>
-
-      {/* Profile menu floating panel */}
-      {showProfileMenu && currentUser && (
-        <div className="fixed bottom-16 left-4 z-50 w-56 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded shadow-lg p-2 animate-fadeIn text-xs font-semibold animate-fadeInFast">
-          <div className="px-3 py-2 border-b border-neutral-100 dark:border-neutral-850">
-            <span className="text-[9px] uppercase font-extrabold text-neutral-400 block">Workspace</span>
-            <span className="text-brand-dark dark:text-neutral-200 font-bold">{activeWorkspace} Workspace</span>
-          </div>
-          <Link href="/admin/dashboard/profile" className="block px-3 py-2 hover:bg-neutral-50 dark:hover:bg-neutral-855 rounded text-neutral-700 dark:text-neutral-300">
-            My Profile
-          </Link>
-          <Link href="/admin/dashboard/profile" className="block px-3 py-2 hover:bg-neutral-50 dark:hover:bg-neutral-855 rounded text-neutral-700 dark:text-neutral-300 border-b border-neutral-100 dark:border-neutral-855">
-            Account Settings
-          </Link>
-          <button onClick={handleLogout} className="w-full text-left px-3 py-2 hover:bg-neutral-50 dark:hover:bg-neutral-855 rounded text-red-500 font-bold cursor-pointer">
-            Logout Session
-          </button>
-        </div>
-      )}
-
-      {/* Overlays for mobile sidebar */}
-      {showMobileSidebar && (
-        <div onClick={() => setShowMobileSidebar(false)} className="fixed inset-0 bg-neutral-955/40 z-30 md:hidden transition-opacity"></div>
-      )}
-
-      {/* 2. RIGHT CONTENT PANEL */}
-      <main className="flex-1 flex flex-col min-w-0 md:pl-64">
-        
-        {/* Top Navbar */}
-        <header className="h-16 border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 flex items-center justify-between px-6 transition-colors duration-300">
-          <div className="flex items-center space-x-3">
-            <button onClick={() => setShowMobileSidebar(true)} className="md:hidden text-neutral-455 hover:text-neutral-800 cursor-pointer">
-              <svg className="w-6 h-6 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
-                <line x1="3" y1="12" x2="21" y2="12"></line>
-                <line x1="3" y1="6" x2="21" y2="6"></line>
-                <line x1="3" y1="18" x2="21" y2="18"></line>
-              </svg>
-            </button>
-            {getBreadcrumbs()}
-          </div>
-
-          <div className="flex items-center space-x-4">
-            {/* Global Search input */}
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <svg className="w-3.5 h-3.5 text-neutral-400 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
-                  <circle cx="11" cy="11" r="8"></circle>
-                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                </svg>
-              </div>
-              <input
-                type="text"
-                placeholder="Search console..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 text-xs rounded-sm pl-9 pr-4 py-1.5 w-40 sm:w-56 focus:outline-none focus:border-brand-red focus:w-64 transition-all text-neutral-800 dark:text-neutral-200"
-              />
-
-              {/* Floating search results popover */}
-              {searchResults.length > 0 && (
-                <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-neutral-900 border border-neutral-250 dark:border-neutral-800 rounded shadow-lg z-50 max-h-80 overflow-y-auto divide-y divide-neutral-100 dark:divide-neutral-850">
-                  {searchResults.map((res, i) => (
-                    <button
-                      key={i}
-                      onClick={res.action}
-                      className="w-full text-left px-4 py-2.5 hover:bg-neutral-50 dark:hover:bg-neutral-850 flex flex-col transition-colors cursor-pointer"
-                    >
-                      <div className="flex justify-between items-center w-full">
-                        <span className="font-bold text-neutral-800 dark:text-neutral-200 text-xs">{res.title}</span>
-                        <span className="text-[8px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded bg-brand-red/10 text-brand-red border border-brand-red/15">{res.type}</span>
-                      </div>
-                      <span className="text-[10px] text-neutral-455 mt-0.5 truncate">{res.sub}</span>
-                    </button>
-                  ))}
-                </div>
+              {unreadNotificationsCount > 0 && (
+                <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-brand-red animate-pulse"></span>
               )}
-            </div>
-
-            {/* Notification Bell Dropdown */}
-            <div className="relative">
-              <button
-                onClick={() => setShowNotificationMenu(!showNotificationMenu)}
-                className="p-1.5 text-neutral-455 hover:text-brand-red dark:text-neutral-400 dark:hover:text-white rounded-full transition-colors relative cursor-pointer"
-              >
-                <svg className="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
-                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-                  <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-                </svg>
-                {unreadNotificationsCount > 0 && (
-                  <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-brand-red animate-pulse"></span>
-                )}
-              </button>
-              {showNotificationMenu && (
-                <div className="absolute right-0 mt-2.5 w-80 sm:w-96 bg-white dark:bg-neutral-905 border border-neutral-200 dark:border-neutral-800 rounded shadow-lg z-50 overflow-hidden font-medium">
-                  <div className="px-4 py-3 border-b border-neutral-100 dark:border-neutral-850 flex items-center justify-between bg-neutral-50 dark:bg-neutral-900/50">
-                    <span className="font-bold text-xs text-brand-dark dark:text-white">Notifications</span>
-                    {unreadNotificationsCount > 0 && (
-                      <button
-                        onClick={handleMarkAllAsRead}
-                        className="text-[10px] text-brand-red hover:underline font-extrabold uppercase tracking-wide cursor-pointer"
-                      >
-                        Mark all as read
-                      </button>
-                    )}
-                  </div>
-                  <div className="max-h-80 overflow-y-auto divide-y divide-neutral-100 dark:divide-neutral-850">
-                    {notifications.length === 0 ? (
-                      <div className="px-4 py-6 text-center text-xs text-neutral-400 font-semibold italic">
-                        You're all caught up.
-                      </div>
-                    ) : (
-                      notifications.map((n) => {
-                        const isUnread = n.status === "UNREAD";
-                        return (
-                          <div
-                            key={n.id}
-                            className={`p-4 flex flex-col space-y-1 text-xs transition-colors hover:bg-neutral-50/50 dark:hover:bg-neutral-850/50 ${
-                              isUnread ? "bg-neutral-50/20 dark:bg-neutral-855/10" : ""
-                            }`}
-                          >
-                            <div className="flex justify-between items-start">
-                              <span className={`font-bold leading-normal text-neutral-800 dark:text-neutral-200 ${isUnread ? "text-brand-dark dark:text-white" : ""}`}>
-                                {n.title}
-                              </span>
-                              <span className="text-[8px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-500 border border-neutral-200 dark:border-neutral-850">
-                                {n.module}
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-neutral-500 dark:text-neutral-400 font-semibold leading-relaxed">
-                              {n.description}
-                            </p>
-                            <div className="flex justify-between items-center pt-2">
-                              <span className="text-[9px] text-neutral-400 font-mono">
-                                {new Date(n.timestamp).toLocaleString()}
-                              </span>
-                              <div className="flex items-center space-x-3">
-                                {n.objectId && n.module === "ARTICLE" && (
-                                  <button
-                                    onClick={() => {
-                                      setActiveTab("articles");
-                                      setShowNotificationMenu(false);
-                                    }}
-                                    className="text-[9px] text-brand-red hover:underline font-bold cursor-pointer"
-                                  >
-                                    View Article
-                                  </button>
-                                )}
-                                {isUnread && (
-                                  <button
-                                    onClick={() => handleMarkAsRead(n.id)}
-                                    className="text-[9px] text-neutral-450 hover:text-neutral-800 dark:hover:text-neutral-205 font-bold cursor-pointer"
-                                  >
-                                    Mark Read
-                                  </button>
-                                )}
-                              </div>
+            </button>
+            {showNotificationMenu && (
+              <div className="absolute right-0 mt-2.5 w-80 sm:w-96 bg-white dark:bg-neutral-905 border border-neutral-200 dark:border-neutral-800 rounded shadow-lg z-50 overflow-hidden font-medium">
+                <div className="px-4 py-3 border-b border-neutral-100 dark:border-neutral-850 flex items-center justify-between bg-neutral-50 dark:bg-neutral-900/50">
+                  <span className="font-bold text-xs text-brand-dark dark:text-white">Notifications</span>
+                  {unreadNotificationsCount > 0 && (
+                    <button
+                      onClick={handleMarkAllAsRead}
+                      className="text-[10px] text-brand-red hover:underline font-extrabold uppercase tracking-wide cursor-pointer"
+                    >
+                      Mark all as read
+                    </button>
+                  )}
+                </div>
+                <div className="max-h-80 overflow-y-auto divide-y divide-neutral-100 dark:divide-neutral-850">
+                  {notifications.length === 0 ? (
+                    <div className="px-4 py-6 text-center text-xs text-neutral-400 font-semibold italic">
+                      You're all caught up.
+                    </div>
+                  ) : (
+                    notifications.map((n) => {
+                      const isUnread = n.status === "UNREAD";
+                      return (
+                        <div
+                          key={n.id}
+                          className={`p-4 flex flex-col space-y-1 text-xs transition-colors hover:bg-neutral-50/50 dark:hover:bg-neutral-855/50 ${
+                            isUnread ? "bg-neutral-50/20 dark:bg-neutral-855/10" : ""
+                          }`}
+                        >
+                          <div className="flex justify-between items-start">
+                            <span className={`font-bold leading-normal text-neutral-800 dark:text-neutral-200 ${isUnread ? "text-brand-dark dark:text-white" : ""}`}>
+                              {n.title}
+                            </span>
+                            <span className="text-[8px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-505 border border-neutral-200 dark:border-neutral-850">
+                              {n.module}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-neutral-500 dark:text-neutral-400 font-semibold leading-relaxed">
+                            {n.description}
+                          </p>
+                          <div className="flex justify-between items-center pt-2">
+                            <span className="text-[9px] text-neutral-400 font-mono">
+                              {new Date(n.timestamp).toLocaleString()}
+                            </span>
+                            <div className="flex items-center space-x-3">
+                              {n.objectId && n.module === "ARTICLE" && (
+                                <button
+                                  onClick={() => {
+                                    setActiveTab("articles");
+                                    setShowNotificationMenu(false);
+                                  }}
+                                  className="text-[9px] text-brand-red hover:underline font-bold cursor-pointer"
+                                >
+                                  View Article
+                                </button>
+                              )}
+                              {isUnread && (
+                                <button
+                                  onClick={() => handleMarkAsRead(n.id)}
+                                  className="text-[9px] text-neutral-455 hover:text-neutral-800 dark:hover:text-neutral-205 font-bold cursor-pointer"
+                                >
+                                  Mark Read
+                                </button>
+                              )}
                             </div>
                           </div>
-                        );
-                      })
-                    )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Profile Menu Trigger */}
+          {currentUser && (
+            <div className="relative">
+              <button
+                onClick={() => setShowProfileMenu(!showProfileMenu)}
+                className="flex items-center space-x-2 focus:outline-none cursor-pointer"
+              >
+                <img
+                  src={currentUser.profilePhoto || "/images/default-avatar.png"}
+                  alt={currentUser.fullName}
+                  className="h-8 w-8 rounded-full object-cover border border-neutral-200 dark:border-neutral-800 bg-white"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = "/images/default-avatar.png";
+                  }}
+                />
+                <span className="hidden sm:inline text-xs font-bold text-neutral-700 dark:text-neutral-300">
+                  {currentUser.fullName}
+                </span>
+              </button>
+              {showProfileMenu && (
+                <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded shadow-lg p-2 z-50 text-xs font-semibold animate-fadeInFast">
+                  <div className="px-3 py-2 border-b border-neutral-100 dark:border-neutral-855">
+                    <span className="text-[9px] uppercase font-extrabold text-neutral-400 block">Role &amp; Workspace</span>
+                    <span className="text-brand-dark dark:text-neutral-250 font-bold block">{currentUser.role}</span>
+                    <span className="text-[10px] text-neutral-455">{activeWorkspace} Workspace</span>
                   </div>
+                  <Link href="/admin/dashboard/profile" className="block px-3 py-2 hover:bg-neutral-50 dark:hover:bg-neutral-855 rounded text-neutral-700 dark:text-neutral-300" onClick={() => setShowProfileMenu(false)}>
+                    My Profile
+                  </Link>
+                  <button onClick={handleLogout} className="w-full text-left px-3 py-2 hover:bg-neutral-50 dark:hover:bg-neutral-855 rounded text-red-500 font-bold cursor-pointer">
+                    Logout Session
+                  </button>
                 </div>
               )}
             </div>
-
-            {/* Quick mini-avatar profile link */}
-            {currentUser && (
-              <img
-                src={currentUser.profilePhoto || "/images/default-avatar.png"}
-                alt={currentUser.fullName}
-                onClick={() => setShowProfileMenu(!showProfileMenu)}
-                className="h-8 w-8 rounded-full object-cover border border-neutral-255 dark:border-neutral-800 cursor-pointer"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = "/images/default-avatar.png";
-                }}
-              />
-            )}
-          </div>
-        </header>
-
-        {/* Dashboard Content Container */}
-        <div className="p-6 md:p-8 max-w-7xl w-full mx-auto space-y-6">
-          {error && (
-            <div className="bg-red-500/10 border border-red-500/30 text-red-500 p-4 rounded text-xs font-bold">
-              {error}
-            </div>
           )}
-
-          {tickerMessage && (
-            <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-450 p-4 rounded text-xs font-bold">
-              {tickerMessage}
-            </div>
-          )}
-
-          {/* Render Tab Content Panel */}
-          {renderTabContent()}
         </div>
-      </main>
+      </header>
+
+      {/* Main Inner Body below Header */}
+      <div className="flex-grow flex min-h-0 relative">
+        {/* 1. LEFT SIDEBAR */}
+        <aside className={`fixed inset-y-14 left-0 z-40 bg-white dark:bg-neutral-900 border-r border-neutral-200 dark:border-neutral-800 flex flex-col justify-between transform transition-all duration-305 md:translate-x-0 h-[calc(100vh-56px)] ${
+          sidebarCollapsed ? "w-16" : "w-64"
+        } ${showMobileSidebar ? "translate-x-0" : "-translate-x-full"}`}>
+          <div className="flex-1 flex flex-col justify-between min-h-0">
+            {/* Navigation Links list */}
+            <div className="flex-1 overflow-y-auto">
+              <nav className="p-3 space-y-1">
+                {visibleTabs.filter(link => link.id !== "inbox").map((link) => (
+                  <button
+                    key={link.id}
+                    title={sidebarCollapsed ? link.label : undefined}
+                    onClick={() => {
+                      setActiveTab(link.id);
+                      setShowMobileSidebar(false);
+                    }}
+                    className={`w-full flex items-center px-3 py-2 rounded-sm text-xs font-bold transition-all text-left cursor-pointer ${
+                      activeTab === link.id
+                        ? "bg-brand-red text-white"
+                        : "text-neutral-550 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-850"
+                    }`}
+                  >
+                    {link.icon}
+                    <span className={sidebarCollapsed ? "hidden" : "inline"}>{link.label}</span>
+                  </button>
+                ))}
+
+                {/* Inbox Section */}
+                <div className="pt-4 pb-1">
+                  <span className={`px-3 text-[9px] font-extrabold uppercase tracking-widest text-neutral-400 dark:text-neutral-505 block ${sidebarCollapsed ? "hidden" : "block"}`}>
+                    Inbox
+                  </span>
+                  {sidebarCollapsed && (
+                    <div className="border-t border-neutral-100 dark:border-neutral-850 mx-3 my-2"></div>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => {
+                    setActiveTab("inbox-dm");
+                    setShowMobileSidebar(false);
+                  }}
+                  title={sidebarCollapsed ? "Direct Messages" : undefined}
+                  className={`w-full flex items-center px-3 py-2 rounded-sm text-xs font-bold transition-all text-left cursor-pointer ${
+                    activeTab === "inbox-dm"
+                      ? "bg-brand-red text-white"
+                      : "text-neutral-550 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-855"
+                  }`}
+                >
+                  <svg className="w-4 h-4 mr-2.5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                  </svg>
+                  <span className={sidebarCollapsed ? "hidden" : "inline"}>Direct Messages</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActiveTab("inbox-groups");
+                    setShowMobileSidebar(false);
+                  }}
+                  title={sidebarCollapsed ? "Groups" : undefined}
+                  className={`w-full flex items-center px-3 py-2 rounded-sm text-xs font-bold transition-all text-left cursor-pointer ${
+                    activeTab === "inbox-groups"
+                      ? "bg-brand-red text-white"
+                      : "text-neutral-550 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-855"
+                  }`}
+                >
+                  <svg className="w-4 h-4 mr-2.5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                  </svg>
+                  <span className={sidebarCollapsed ? "hidden" : "inline"}>Groups</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActiveTab("inbox-announcements");
+                    setShowMobileSidebar(false);
+                  }}
+                  title={sidebarCollapsed ? "Announcements" : undefined}
+                  className={`w-full flex items-center px-3 py-2 rounded-sm text-xs font-bold transition-all text-left cursor-pointer ${
+                    activeTab === "inbox-announcements"
+                      ? "bg-brand-red text-white"
+                      : "text-neutral-550 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-855"
+                  }`}
+                >
+                  <svg className="w-4 h-4 mr-2.5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                    <line x1="12" y1="9" x2="12" y2="13"></line>
+                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                  </svg>
+                  <span className={sidebarCollapsed ? "hidden" : "inline"}>Announcements</span>
+                </button>
+
+                {visibleTabs.some(link => link.id === "inbox") && (
+                  <button
+                    onClick={() => {
+                      setActiveTab("inbox");
+                      setShowMobileSidebar(false);
+                    }}
+                    title={sidebarCollapsed ? "Public Inquiries" : undefined}
+                    className={`w-full flex items-center px-3 py-2 rounded-sm text-xs font-bold transition-all text-left cursor-pointer ${
+                      activeTab === "inbox"
+                        ? "bg-brand-red text-white"
+                        : "text-neutral-550 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-855"
+                    }`}
+                  >
+                    <svg className="w-4 h-4 mr-2.5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                      <polyline points="22,6 12,13 2,6"></polyline>
+                    </svg>
+                    <span className={sidebarCollapsed ? "hidden" : "inline"}>Public Inquiries</span>
+                  </button>
+                )}
+              </nav>
+            </div>
+
+            {/* Collapse Toggle Button at Sidebar bottom */}
+            <div className="p-3 border-t border-neutral-100 dark:border-neutral-850">
+              <button
+                onClick={toggleSidebarCollapse}
+                className="w-full flex items-center justify-center p-2 rounded hover:bg-neutral-100 dark:hover:bg-neutral-850 text-neutral-450 dark:text-neutral-400 cursor-pointer"
+                title={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+              >
+                <svg className={`w-4 h-4 stroke-current fill-none stroke-2 transform transition-transform duration-300 ${sidebarCollapsed ? "rotate-180" : ""}`} viewBox="0 0 24 24">
+                  <polyline points="11 17 6 12 11 7"></polyline>
+                  <polyline points="18 17 13 12 18 7"></polyline>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        {/* Overlays for mobile sidebar */}
+        {showMobileSidebar && (
+          <div onClick={() => setShowMobileSidebar(false)} className="fixed inset-0 bg-neutral-955/40 z-30 md:hidden transition-opacity"></div>
+        )}
+
+        {/* 2. RIGHT CONTENT PANEL */}
+        <main className={`flex-grow flex flex-col min-w-0 transition-all duration-305 ${
+          sidebarCollapsed ? "md:pl-16" : "md:pl-64"
+        }`}>
+          {/* Dashboard Content Container */}
+          <div className="p-6 md:p-8 space-y-6 w-full max-w-full">
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/30 text-red-500 p-4 rounded text-xs font-bold">
+                {error}
+              </div>
+            )}
+
+            {tickerMessage && (
+              <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-450 p-4 rounded text-xs font-bold">
+                {tickerMessage}
+              </div>
+            )}
+
+            {/* Render Tab Content Panel */}
+            {renderTabContent()}
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
