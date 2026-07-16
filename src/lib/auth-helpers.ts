@@ -51,11 +51,7 @@ export async function validatePermissions(
     return { authorized: false, session: null };
   }
 
-  // Legacy fallback override (if old admin table record has logged in)
-  if (session.userId === "admin-legacy") {
-    console.log(`[RBAC] Authorizing legacy administrator -> Granted`);
-    return { authorized: true, session };
-  }
+
 
   // Load user from database including roles and relationships
   const dbUser = await prisma.user.findUnique({

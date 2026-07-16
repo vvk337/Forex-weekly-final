@@ -38,13 +38,16 @@ export async function ensureDbSeeded() {
     }
 
     // 4. Check User Seeding
-    const userCount = await prisma.user.count();
-    if (userCount === 0) {
-      // Create initial OWNER
-      const hashedPassword = await bcrypt.hash("admin123", 10);
-      const ownerRole = rolesMap["OWNER"];
-      
-      const ownerUser = await prisma.user.create({
+    const ownerRole = rolesMap["OWNER"];
+    const adminRole = rolesMap["ADMIN"];
+    const hashedPassword = await bcrypt.hash("admin123", 10);
+
+    let ownerUser = await prisma.user.findUnique({
+      where: { username: "admin" }
+    });
+
+    if (!ownerUser) {
+      ownerUser = await prisma.user.create({
         data: {
           fullName: "System Owner",
           username: "admin",
@@ -71,30 +74,57 @@ export async function ensureDbSeeded() {
       });
 
       console.log("[DB SEED] Default OWNER user seeded successfully.");
-    } else {
-      // Align any users with missing roleId (Self-healing migration path)
-      const orphanUsers = await prisma.user.findMany({
-        where: { roleId: null },
-      });
+    }
 
-      if (orphanUsers.length > 0) {
-        const employeeRole = rolesMap["EMPLOYEE"];
-        for (const u of orphanUsers) {
-          await prisma.user.update({
-            where: { id: u.id },
-            data: {
-              roleId: employeeRole,
-              departments: {
-                connect: { id: deptsMap["Publication"] },
-              },
-              workspaces: {
-                connect: { id: wsMap["Publication"] },
-              },
+    let adminUser = await prisma.user.findUnique({
+      where: { username: "administrator" }
+    });
+
+    if (!adminUser) {
+      adminUser = await prisma.user.create({
+        data: {
+          fullName: "System Admin",
+          username: "administrator",
+          email: "admin@forexweekly.com",
+          password: hashedPassword,
+          roleId: adminRole,
+          status: "ACTIVE",
+          phone: "",
+          dob: "",
+          createdBy: "System",
+          departments: {
+            connect: { id: deptsMap["Publication"] },
+          },
+          workspaces: {
+            connect: { id: wsMap["Publication"] },
+          },
+        },
+      });
+      console.log("[DB SEED] Default ADMIN user seeded successfully.");
+    }
+
+    // Align any users with missing roleId (Self-healing migration path)
+    const orphanUsers = await prisma.user.findMany({
+      where: { roleId: null },
+    });
+
+    if (orphanUsers.length > 0) {
+      const employeeRole = rolesMap["EMPLOYEE"];
+      for (const u of orphanUsers) {
+        await prisma.user.update({
+          where: { id: u.id },
+          data: {
+            roleId: employeeRole,
+            departments: {
+              connect: { id: deptsMap["Publication"] },
             },
-          });
-        }
-        console.log(`[DB SEED] Migrated ${orphanUsers.length} legacy orphan users to EMPLOYEE role.`);
+            workspaces: {
+              connect: { id: wsMap["Publication"] },
+            },
+          },
+        });
       }
+      console.log(`[DB SEED] Migrated ${orphanUsers.length} legacy orphan users to EMPLOYEE role.`);
     }
 
     // Initialize notification settings for any users missing them

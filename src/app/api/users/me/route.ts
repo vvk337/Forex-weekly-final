@@ -9,22 +9,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (session.userId === "admin-legacy") {
-      return NextResponse.json({
-        id: "admin-legacy",
-        fullName: "Legacy Admin",
-        username: session.username,
-        email: "admin@forexweekly.com",
-        role: "OWNER",
-        status: "ACTIVE",
-        departments: ["Editorial"],
-        workspaces: ["Publication"],
-        phone: "",
-        dob: "",
-        profilePhoto: "/images/default-avatar.png",
-        activeSince: new Date().toISOString(),
-      });
-    }
+
 
     const user = await prisma.user.findUnique({
       where: { id: session.userId },

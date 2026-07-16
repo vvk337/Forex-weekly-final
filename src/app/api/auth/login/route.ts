@@ -19,18 +19,6 @@ export async function POST(request: Request) {
     // Call DB seeder to make sure default Roles, Departments, Workspaces, and OWNER exist
     await ensureDbSeeded();
 
-    // Auto-seed legacy Admin table for database backward compatibility
-    const adminCount = await prisma.admin.count();
-    if (adminCount === 0) {
-      const hashedPassword = await bcrypt.hash("admin123", 10);
-      await prisma.admin.create({
-        data: {
-          username: "admin",
-          password: hashedPassword,
-        },
-      });
-    }
-
     // Lookup user in DB User table first, including role and workspaces relation
     const dbUser = await prisma.user.findUnique({
       where: { username },
@@ -40,39 +28,26 @@ export async function POST(request: Request) {
       },
     });
 
-    let targetUserPassword = "";
-    let isLegacyAdmin = false;
+    if (!dbUser) {
+      await createAuditLog(request, { userId: "", username }, "Failed Login Attempt", "AUTH", null, username, "FAILURE", "Username not found");
+      return NextResponse.json(
+        { error: "Invalid username or password" },
+        { status: 401 }
+      );
+    }
 
-    if (dbUser) {
-      if (dbUser.isArchived) {
-        await createAuditLog(request, { userId: dbUser.id, username }, "Failed Login Attempt", "AUTH", dbUser.id, username, "FAILURE", "Account archived");
-        return NextResponse.json(
-          { error: "Your account has been archived. Access denied." },
-          { status: 403 }
-        );
-      }
-      targetUserPassword = dbUser.password;
-    } else {
-      // Fallback: Check legacy Admin table
-      const legacyAdmin = await prisma.admin.findUnique({
-        where: { username },
-      });
-      if (!legacyAdmin) {
-        await createAuditLog(request, { userId: "", username }, "Failed Login Attempt", "AUTH", null, username, "FAILURE", "Username not found");
-        return NextResponse.json(
-          { error: "Invalid username or password" },
-          { status: 401 }
-        );
-      }
-      targetUserPassword = legacyAdmin.password;
-      isLegacyAdmin = true;
+    if (dbUser.isArchived) {
+      await createAuditLog(request, { userId: dbUser.id, username }, "Failed Login Attempt", "AUTH", dbUser.id, username, "FAILURE", "Account archived");
+      return NextResponse.json(
+        { error: "Your account has been archived. Access denied." },
+        { status: 403 }
+      );
     }
 
     // Verify password
-    const isPasswordValid = await bcrypt.compare(password, targetUserPassword);
+    const isPasswordValid = await bcrypt.compare(password, dbUser.password);
     if (!isPasswordValid) {
-      const targetId = dbUser ? dbUser.id : null;
-      await createAuditLog(request, { userId: targetId || "", username }, "Failed Login Attempt", "AUTH", targetId, username, "FAILURE", "Password mismatch");
+      await createAuditLog(request, { userId: dbUser.id, username }, "Failed Login Attempt", "AUTH", dbUser.id, username, "FAILURE", "Password mismatch");
       return NextResponse.json(
         { error: "Invalid username or password" },
         { status: 401 }
@@ -80,29 +55,26 @@ export async function POST(request: Request) {
     }
 
     // Update login status for User model
-    if (dbUser && !isLegacyAdmin) {
-      await prisma.user.update({
-        where: { id: dbUser.id },
-        data: {
-          lastLogin: new Date(),
-          lastActivity: new Date(),
-          isOnline: true,
-        },
-      });
-    }
+    await prisma.user.update({
+      where: { id: dbUser.id },
+      data: {
+        lastLogin: new Date(),
+        lastActivity: new Date(),
+        isOnline: true,
+      },
+    });
 
     // Generate JWT payload with ID, username, and Role name
     const payload = {
-      id: dbUser ? dbUser.id : "admin-legacy",
+      id: dbUser.id,
       username,
-      role: dbUser?.role?.name || "OWNER",
-      workspaceId: dbUser?.workspaces?.[0]?.name || "Publication",
+      role: dbUser.role?.name || "EMPLOYEE",
+      workspaceId: dbUser.workspaces?.[0]?.name || "Publication",
     };
     const token = await signJWT(payload);
 
     // Create Audit Log
-    const targetId = dbUser ? dbUser.id : "admin-legacy";
-    await createAuditLog(request, { userId: targetId, username }, "Logged In", "AUTH", targetId, username);
+    await createAuditLog(request, { userId: dbUser.id, username }, "Logged In", "AUTH", dbUser.id, username);
 
     // Set cookie response
     const response = NextResponse.json(

@@ -10,12 +10,7 @@ generator client {
   provider = "prisma-client-js"
 }
 
-model Admin {
-  id        String   @id @default(uuid())
-  username  String   @unique
-  password  String   // Hashed password
-  createdAt DateTime @default(now())
-}
+
 
 model Article {
   id              String    @id @default(uuid())

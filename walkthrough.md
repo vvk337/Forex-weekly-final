@@ -25,5 +25,15 @@ We created dedicated layout components in `src/components/admin/` to organize th
 
 ---
 
+## 5. Production System Reset
+- **Removed legacy Admin table**: Deleted `model Admin` from `prisma/schema.prisma` and dropped the `Admin` table in the database (`npx prisma db push --accept-data-loss`).
+- **Removed auth fallbacks**: Deleted legacy credentials checks from `/api/auth/login`, `/api/users/me`, and `auth-helpers.ts` bypasses. The application now authenticates strictly against the modern relational `User` table.
+- **System Accounts Alignment**: Modified the seeder to enforce proper system accounts exist:
+  - `@admin` (System Owner) is configured with `OWNER` role.
+  - `@administrator` (System Admin) is configured with `ADMIN` role.
+- **Production Cleanup**: Executed a cleanup script (`scripts/production-reset.js`) that cleared all non-system users, chat messages, system notifications, and audit logs.
+
 ## Verification & Testing
 - Next.js production build completed successfully with full type-safety.
+- SQLite Database is in sync and contains exactly two users: `@admin` (Owner) and `@administrator` (Admin).
+
