@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -11,13 +11,30 @@ export default function CreateArticlePage() {
     excerpt: "",
     content: "",
     category: "",
-    author: "David Vance", // default editor
+    author: "", // Will be auto-populated by current user handle
     imageUrl: "",
     isFeatured: false,
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    async function fetchSession() {
+      try {
+        const res = await fetch("/api/users/me");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.username) {
+            setFormData((prev) => ({ ...prev, author: data.username }));
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch session username", err);
+      }
+    }
+    fetchSession();
+  }, []);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -135,9 +152,9 @@ export default function CreateArticlePage() {
             <input
               type="text"
               required
+              readOnly
               value={formData.author}
-              onChange={(e) => setFormData({ ...formData, author: e.target.value })}
-              className="w-full bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded px-3 py-2 text-xs text-brand-dark dark:text-white focus:outline-none focus:border-brand-red transition-colors"
+              className="w-full bg-neutral-100 dark:bg-neutral-850 border border-neutral-200 dark:border-neutral-800 rounded px-3 py-2 text-xs text-neutral-500 cursor-not-allowed focus:outline-none"
             />
           </div>
         </div>
