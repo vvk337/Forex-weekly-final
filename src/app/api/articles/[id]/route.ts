@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { validatePermissions } from "@/lib/auth-helpers";
 import { createAuditLog } from "@/lib/audit-helper";
+import { createNotification } from "@/lib/notification-helper";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -161,6 +162,36 @@ export async function PUT(request: Request, { params }: RouteParams) {
       "SUCCESS",
       auditComment
     );
+
+    // Send Notifications based on state transitions
+    if (status !== undefined && status !== existingArticle.status) {
+      if (status === "PENDING") {
+        await createNotification({
+          title: "Article Submitted",
+          description: `Article '${updated.title}' has been submitted for review by @${updated.author}.`,
+          module: "ARTICLE",
+          objectId: updated.id,
+          roleScope: ["SUPERVISOR"],
+          departmentScope: updated.department,
+        });
+      } else if (status === "PUBLISHED") {
+        await createNotification({
+          title: "Article Approved & Published",
+          description: `Your article '${updated.title}' has been approved and published.`,
+          module: "ARTICLE",
+          objectId: updated.id,
+          targetUsername: updated.author,
+        });
+      } else if (status === "DRAFT" && revisionComment) {
+        await createNotification({
+          title: "Article Returned for Revision",
+          description: `Your article '${updated.title}' requires revision. Reason: ${revisionComment}`,
+          module: "ARTICLE",
+          objectId: updated.id,
+          targetUsername: updated.author,
+        });
+      }
+    }
 
     return NextResponse.json(updated, { status: 200 });
   } catch (error) {

@@ -96,6 +96,18 @@ export async function ensureDbSeeded() {
         console.log(`[DB SEED] Migrated ${orphanUsers.length} legacy orphan users to EMPLOYEE role.`);
       }
     }
+
+    // Initialize notification settings for any users missing them
+    const usersWithoutSettings = await prisma.user.findMany({
+      where: { notificationSetting: null },
+    });
+    for (const u of usersWithoutSettings) {
+      await prisma.notificationSetting.create({
+        data: {
+          userId: u.id,
+        },
+      });
+    }
   } catch (error) {
     console.error("[DB SEED] Seeding failed:", error);
   }

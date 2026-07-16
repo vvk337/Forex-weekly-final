@@ -38,6 +38,13 @@ export default function MyProfilePage() {
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
+  // Notification Preferences states
+  const [articlesEnabled, setArticlesEnabled] = useState(true);
+  const [breakingNewsEnabled, setBreakingNewsEnabled] = useState(true);
+  const [announcementsEnabled, setAnnouncementsEnabled] = useState(true);
+  const [systemEnabled, setSystemEnabled] = useState(true);
+  const [savingSettings, setSavingSettings] = useState(false);
+
   useEffect(() => {
     fetch("/api/users/me")
       .then((res) => {
@@ -56,6 +63,16 @@ export default function MyProfilePage() {
         setError(err.message || "Failed to load profile");
         setLoading(false);
       });
+
+    fetch("/api/notifications/settings")
+      .then((res) => res.json())
+      .then((data) => {
+        setArticlesEnabled(data.articlesEnabled ?? true);
+        setBreakingNewsEnabled(data.breakingNewsEnabled ?? true);
+        setAnnouncementsEnabled(data.announcementsEnabled ?? true);
+        setSystemEnabled(data.systemEnabled ?? true);
+      })
+      .catch((e) => console.error("Failed to load settings", e));
   }, []);
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
@@ -136,6 +153,32 @@ export default function MyProfilePage() {
       setError(err.message || "Failed to update password");
     } finally {
       setUpdating(false);
+    }
+  };
+
+  const handleUpdatePreferences = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingSettings(true);
+    setError("");
+    setSuccessMsg("");
+    try {
+      const res = await fetch("/api/notifications/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          articlesEnabled,
+          breakingNewsEnabled,
+          announcementsEnabled,
+          systemEnabled,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update preferences");
+      setSuccessMsg("Notification preferences saved successfully!");
+    } catch (err: any) {
+      setError(err.message || "Failed to save settings");
+    } finally {
+      setSavingSettings(false);
     }
   };
 
@@ -330,6 +373,65 @@ export default function MyProfilePage() {
                 className="bg-brand-red hover:bg-brand-red-dark text-white text-xs font-bold uppercase tracking-wider px-6 py-2.5 rounded-sm transition-colors cursor-pointer disabled:opacity-50"
               >
                 {updating ? "Saving Password..." : "Update Password"}
+              </button>
+            </div>
+          </form>
+
+          {/* Notification preferences form */}
+          <form onSubmit={handleUpdatePreferences} className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded p-6 space-y-6 transition-colors duration-300">
+            <h3 className="text-xs font-extrabold uppercase tracking-widest text-brand-red border-b border-neutral-100 dark:border-neutral-850 pb-2">
+              Notification Preferences
+            </h3>
+
+            <div className="space-y-4 font-semibold text-xs text-neutral-700 dark:text-neutral-300">
+              <label className="flex items-center space-x-3.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={articlesEnabled}
+                  onChange={(e) => setArticlesEnabled(e.target.checked)}
+                  className="rounded border-neutral-300 text-brand-red focus:ring-brand-red h-4 w-4"
+                />
+                <span>Enable Article Notifications (Submissions, Approvals, Revisions)</span>
+              </label>
+
+              <label className="flex items-center space-x-3.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={breakingNewsEnabled}
+                  onChange={(e) => setBreakingNewsEnabled(e.target.checked)}
+                  className="rounded border-neutral-300 text-brand-red focus:ring-brand-red h-4 w-4"
+                />
+                <span>Enable Breaking News Ticker Alerts</span>
+              </label>
+
+              <label className="flex items-center space-x-3.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={announcementsEnabled}
+                  onChange={(e) => setAnnouncementsEnabled(e.target.checked)}
+                  className="rounded border-neutral-300 text-brand-red focus:ring-brand-red h-4 w-4"
+                />
+                <span>Enable System Wide Announcements</span>
+              </label>
+
+              <label className="flex items-center space-x-3.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={systemEnabled}
+                  onChange={(e) => setSystemEnabled(e.target.checked)}
+                  className="rounded border-neutral-300 text-brand-red focus:ring-brand-red h-4 w-4"
+                />
+                <span>Enable Workspace &amp; System Events (Password, Assignments, Invites)</span>
+              </label>
+            </div>
+
+            <div className="flex justify-end pt-5 border-t border-neutral-100 dark:border-neutral-800">
+              <button
+                type="submit"
+                disabled={savingSettings}
+                className="bg-brand-red hover:bg-brand-red-dark text-white text-xs font-bold uppercase tracking-wider px-6 py-2.5 rounded-sm transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {savingSettings ? "Saving Settings..." : "Save Preferences"}
               </button>
             </div>
           </form>

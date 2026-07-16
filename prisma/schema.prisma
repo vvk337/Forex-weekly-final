@@ -88,6 +88,7 @@ model User {
   updatedAt           DateTime     @updatedAt
   forcePasswordChange Boolean      @default(false)
   tempPassword        String       @default("")
+  notificationSetting NotificationSetting?
 }
 
 model Role {
@@ -138,4 +139,25 @@ model AuditLog {
   result      String   @default("SUCCESS") // SUCCESS, FAILURE
   ipAddress   String?
   details     String?  // JSON string details
+}
+
+model Notification {
+  id          String   @id @default(uuid())
+  timestamp   DateTime @default(now())
+  title       String
+  description String
+  module      String   // ARTICLE, BREAKING_NEWS, SYSTEM, ANNOUNCEMENT
+  objectId    String?
+  status      String   @default("UNREAD") // UNREAD, READ, ARCHIVED
+  username    String   // Target recipient username
+}
+
+model NotificationSetting {
+  id                    String  @id @default(uuid())
+  userId                String  @unique
+  user                  User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  articlesEnabled       Boolean @default(true)
+  breakingNewsEnabled   Boolean @default(true)
+  announcementsEnabled  Boolean @default(true)
+  systemEnabled         Boolean @default(true)
 }

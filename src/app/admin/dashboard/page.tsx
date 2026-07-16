@@ -182,6 +182,59 @@ export default function AdminDashboardPage() {
       fetchAuditLogs();
     }
   }, [activeTab, auditUserQuery, auditModuleFilter, auditActionFilter, auditDateStart, auditDateEnd]);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
+  const [showNotificationMenu, setShowNotificationMenu] = useState(false);
+
+  const fetchNotifications = async () => {
+    try {
+      const res = await fetch("/api/notifications");
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(data.notifications || []);
+        setUnreadNotificationsCount(data.unreadCount || 0);
+      }
+    } catch (e) {
+      console.error("Failed to fetch user notifications", e);
+    }
+  };
+
+  const handleMarkAsRead = async (id: string) => {
+    try {
+      const res = await fetch("/api/notifications", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      if (res.ok) {
+        fetchNotifications();
+      }
+    } catch (e) {
+      console.error("Failed to mark notification as read", e);
+    }
+  };
+
+  const handleMarkAllAsRead = async () => {
+    try {
+      const res = await fetch("/api/notifications", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ all: true }),
+      });
+      if (res.ok) {
+        fetchNotifications();
+      }
+    } catch (e) {
+      console.error("Failed to mark all notifications as read", e);
+    }
+  };
+
+  useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     fetch("/api/users/me")
       .then((res) => {
@@ -2225,6 +2278,94 @@ export default function AdminDashboardPage() {
                       <span className="text-[10px] text-neutral-455 mt-0.5 truncate">{res.sub}</span>
                     </button>
                   ))}
+                </div>
+              )}
+            </div>
+
+            {/* Notification Bell Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setShowNotificationMenu(!showNotificationMenu)}
+                className="p-1.5 text-neutral-455 hover:text-brand-red dark:text-neutral-400 dark:hover:text-white rounded-full transition-colors relative cursor-pointer"
+              >
+                <svg className="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                </svg>
+                {unreadNotificationsCount > 0 && (
+                  <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-brand-red animate-pulse"></span>
+                )}
+              </button>
+              {showNotificationMenu && (
+                <div className="absolute right-0 mt-2.5 w-80 sm:w-96 bg-white dark:bg-neutral-905 border border-neutral-200 dark:border-neutral-800 rounded shadow-lg z-50 overflow-hidden font-medium">
+                  <div className="px-4 py-3 border-b border-neutral-100 dark:border-neutral-850 flex items-center justify-between bg-neutral-50 dark:bg-neutral-900/50">
+                    <span className="font-bold text-xs text-brand-dark dark:text-white">Notifications</span>
+                    {unreadNotificationsCount > 0 && (
+                      <button
+                        onClick={handleMarkAllAsRead}
+                        className="text-[10px] text-brand-red hover:underline font-extrabold uppercase tracking-wide cursor-pointer"
+                      >
+                        Mark all as read
+                      </button>
+                    )}
+                  </div>
+                  <div className="max-h-80 overflow-y-auto divide-y divide-neutral-100 dark:divide-neutral-850">
+                    {notifications.length === 0 ? (
+                      <div className="px-4 py-6 text-center text-xs text-neutral-400 font-semibold italic">
+                        You're all caught up.
+                      </div>
+                    ) : (
+                      notifications.map((n) => {
+                        const isUnread = n.status === "UNREAD";
+                        return (
+                          <div
+                            key={n.id}
+                            className={`p-4 flex flex-col space-y-1 text-xs transition-colors hover:bg-neutral-50/50 dark:hover:bg-neutral-850/50 ${
+                              isUnread ? "bg-neutral-50/20 dark:bg-neutral-855/10" : ""
+                            }`}
+                          >
+                            <div className="flex justify-between items-start">
+                              <span className={`font-bold leading-normal text-neutral-800 dark:text-neutral-200 ${isUnread ? "text-brand-dark dark:text-white" : ""}`}>
+                                {n.title}
+                              </span>
+                              <span className="text-[8px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-500 border border-neutral-200 dark:border-neutral-850">
+                                {n.module}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-neutral-500 dark:text-neutral-400 font-semibold leading-relaxed">
+                              {n.description}
+                            </p>
+                            <div className="flex justify-between items-center pt-2">
+                              <span className="text-[9px] text-neutral-400 font-mono">
+                                {new Date(n.timestamp).toLocaleString()}
+                              </span>
+                              <div className="flex items-center space-x-3">
+                                {n.objectId && n.module === "ARTICLE" && (
+                                  <button
+                                    onClick={() => {
+                                      setActiveTab("articles");
+                                      setShowNotificationMenu(false);
+                                    }}
+                                    className="text-[9px] text-brand-red hover:underline font-bold cursor-pointer"
+                                  >
+                                    View Article
+                                  </button>
+                                )}
+                                {isUnread && (
+                                  <button
+                                    onClick={() => handleMarkAsRead(n.id)}
+                                    className="text-[9px] text-neutral-450 hover:text-neutral-800 dark:hover:text-neutral-205 font-bold cursor-pointer"
+                                  >
+                                    Mark Read
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
               )}
             </div>

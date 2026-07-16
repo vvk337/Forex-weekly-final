@@ -3,6 +3,7 @@ import prisma from "@/lib/db";
 import { validatePermissions, getSession } from "@/lib/auth-helpers";
 import { mockArticles } from "@/data/mockData";
 import { createAuditLog } from "@/lib/audit-helper";
+import { createNotification } from "@/lib/notification-helper";
 
 // Seed articles dynamically if DB is empty
 async function ensureArticlesSeeded() {
@@ -36,16 +37,29 @@ export async function GET(request: Request) {
     await ensureArticlesSeeded();
 
     // Auto-publish scheduled articles that are past due
-    await prisma.article.updateMany({
+    const overdueScheduled = await prisma.article.findMany({
       where: {
         status: "SCHEDULED",
         scheduledAt: { lte: new Date() },
       },
-      data: {
-        status: "PUBLISHED",
-        publishedAt: new Date(),
-      },
     });
+
+    for (const art of overdueScheduled) {
+      await prisma.article.update({
+        where: { id: art.id },
+        data: {
+          status: "PUBLISHED",
+          publishedAt: new Date(),
+        },
+      });
+      await createNotification({
+        title: "Scheduled Article Published",
+        description: `Scheduled article '${art.title}' has been published.`,
+        module: "ARTICLE",
+        objectId: art.id,
+        targetUsername: art.author,
+      });
+    }
 
     const { searchParams } = new URL(request.url);
     const category = searchParams.get("category");

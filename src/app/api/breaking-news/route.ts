@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { validatePermissions } from "@/lib/auth-helpers";
 import { createAuditLog } from "@/lib/audit-helper";
+import { createNotification } from "@/lib/notification-helper";
 
 // Cache variables for live RSS feed
 let cachedHeadlines: string[] = [];
@@ -197,6 +198,14 @@ export async function PUT(request: Request) {
     for (const item of newItems) {
       if (!oldTexts.includes(item.text)) {
         await createAuditLog(request, null, "Created", "BREAKING_NEWS", "ticker", item.text);
+        if (mode === "manual") {
+          await createNotification({
+            title: "Breaking News Published",
+            description: `ALERT: ${item.text}`,
+            module: "BREAKING_NEWS",
+            objectId: "ticker",
+          });
+        }
       } else {
         const oldItem = oldItems.find(x => x.text === item.text);
         if (oldItem && (oldItem.expiresAt !== item.expiresAt || oldItem.expiryOption !== item.expiryOption)) {
@@ -214,6 +223,12 @@ export async function PUT(request: Request) {
     if (existing && mode !== existing.mode) {
       if (mode === "manual") {
         await createAuditLog(request, null, "Published", "BREAKING_NEWS", "ticker", "Manual Ticker Mode Activated");
+        await createNotification({
+          title: "Breaking News Published",
+          description: "Manual override breaking news ticker feed is now active.",
+          module: "BREAKING_NEWS",
+          objectId: "ticker",
+        });
       } else {
         await createAuditLog(request, null, "Edited", "BREAKING_NEWS", "ticker", "Auto Ticker Mode Activated");
       }

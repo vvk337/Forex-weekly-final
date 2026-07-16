@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import prisma from "@/lib/db";
 import { validatePermissions } from "@/lib/auth-helpers";
 import { createAuditLog } from "@/lib/audit-helper";
+import { createNotification } from "@/lib/notification-helper";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -239,6 +240,27 @@ export async function PUT(request: Request, { params }: RouteParams) {
       "SUCCESS",
       loggedComment
     );
+
+    // Send notifications for key changes
+    if (password !== undefined && password.trim() !== "") {
+      await createNotification({
+        title: "Account Password Updated",
+        description: "Your profile login password has been changed.",
+        module: "SYSTEM",
+        objectId: updatedUser.id,
+        targetUsername: updatedUser.username,
+      });
+    }
+
+    if (departments !== undefined || workspaces !== undefined || role !== undefined) {
+      await createNotification({
+        title: "Workspace Scope Modified",
+        description: "Your assigned departments, workspaces, or role configurations have been updated.",
+        module: "SYSTEM",
+        objectId: updatedUser.id,
+        targetUsername: updatedUser.username,
+      });
+    }
 
     return NextResponse.json({
       success: true,

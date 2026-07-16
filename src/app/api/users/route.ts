@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import prisma from "@/lib/db";
 import { validatePermissions } from "@/lib/auth-helpers";
 import { createAuditLog } from "@/lib/audit-helper";
+import { createNotification } from "@/lib/notification-helper";
 
 // GET List Users (relational mapping)
 export async function GET(request: Request) {
@@ -196,6 +197,9 @@ export async function POST(request: Request) {
         workspaces: {
           connect: wsConnect,
         },
+        notificationSetting: {
+          create: {},
+        },
       },
       include: {
         role: true,
@@ -210,6 +214,14 @@ export async function POST(request: Request) {
       newUser.id,
       newUser.username
     );
+
+    await createNotification({
+      title: "User Invitation",
+      description: `Welcome to the platform! Your new account @${newUser.username} is active.`,
+      module: "SYSTEM",
+      objectId: newUser.id,
+      targetUsername: newUser.username,
+    });
 
     return NextResponse.json(
       {
