@@ -11,8 +11,9 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache
 
 // Helper to check if request is authenticated as admin
 async function isAuthenticated(request: Request) {
-  const { authorized } = await validatePermissions(request, "ticker:write");
-  return authorized;
+  const { authorized: canCreate } = await validatePermissions(request, "breaking-news:create");
+  const { authorized: canManage } = await validatePermissions(request, "breaking-news:manage");
+  return canCreate || canManage;
 }
 
 // Simple regex XML parser for RSS headlines

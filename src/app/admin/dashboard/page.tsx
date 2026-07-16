@@ -979,7 +979,7 @@ export default function AdminDashboardPage() {
       const validManualItems = tickerItems.filter((item) => item.text.trim() !== "");
       
       const res = await fetch("/api/breaking-news", {
-        method: "POST",
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           mode: tickerMode,
