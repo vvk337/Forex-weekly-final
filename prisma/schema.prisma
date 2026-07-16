@@ -161,3 +161,39 @@ model NotificationSetting {
   announcementsEnabled  Boolean @default(true)
   systemEnabled         Boolean @default(true)
 }
+
+model ChatConversation {
+  id                  String        @id @default(uuid())
+  type                String        // "DIRECT" or "GROUP"
+  name                String?       // Group name
+  description         String?       // Group description
+  createdBy           String?       // Group creator
+  createdDate         DateTime      @default(now())
+  isArchived          Boolean       @default(false)
+  archivedByUsernames String        @default("[]")  // JSON list of usernames who archived this conversation
+  deletedByUsernames  String        @default("[]")  // JSON list of usernames who deleted this conversation from their view
+  memberUsernames     String        @default("[]")  // JSON list of usernames in direct message or group members
+  messages            ChatMessage[]
+}
+
+model ChatMessage {
+  id              String           @id @default(uuid())
+  conversationId  String
+  conversation    ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderUsername  String
+  content         String
+  timestamp       DateTime         @default(now())
+  readByUsernames String           @default("[]")  // JSON list of usernames who have read this message
+  attachmentUrl   String?          // prepared file architecture
+  attachmentName  String?          // prepared file architecture
+}
+
+model SystemAnnouncement {
+  id            String    @id @default(uuid())
+  title         String
+  message       String
+  createdBy     String
+  createdDate   DateTime  @default(now())
+  expiryDate    DateTime?
+  isPinned      Boolean   @default(false)
+}

@@ -75,7 +75,7 @@ export default function AdminDashboardPage() {
   const [savingTicker, setSavingTicker] = useState(false);
   const [tickerMessage, setTickerMessage] = useState("");
 
-  const [activeTab, setActiveTab] = useState<"dashboard" | "articles" | "sponsors" | "inbox" | "ticker" | "users" | "reports" | "audit-logs">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "articles" | "sponsors" | "inbox" | "inbox-dm" | "inbox-groups" | "inbox-announcements" | "ticker" | "users" | "reports" | "audit-logs">("dashboard");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -186,6 +186,36 @@ export default function AdminDashboardPage() {
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const [showNotificationMenu, setShowNotificationMenu] = useState(false);
 
+  // DM states
+  const [dmConversations, setDmConversations] = useState<any[]>([]);
+  const [selectedDmConv, setSelectedDmConv] = useState<any | null>(null);
+  const [dmMessages, setDmMessages] = useState<any[]>([]);
+  const [dmInput, setDmInput] = useState("");
+  const [dmSearchQuery, setDmSearchQuery] = useState("");
+  const [userSearchQuery, setUserSearchQuery] = useState("");
+  const [searchResultsUsers, setSearchResultsUsers] = useState<any[]>([]);
+  const [showNewDmModal, setShowNewDmModal] = useState(false);
+  const [dmChatSearchQuery, setDmChatSearchQuery] = useState("");
+
+  // Groups states
+  const [groups, setGroups] = useState<any[]>([]);
+  const [selectedGroup, setSelectedGroup] = useState<any | null>(null);
+  const [groupMessages, setGroupMessages] = useState<any[]>([]);
+  const [groupInput, setGroupInput] = useState("");
+  const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [newGroupDesc, setNewGroupDesc] = useState("");
+  const [newGroupSelectedMembers, setNewGroupSelectedMembers] = useState<string[]>([]);
+  const [groupChatSearchQuery, setGroupChatSearchQuery] = useState("");
+
+  // Announcements states
+  const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [showNewAnnouncementModal, setShowNewAnnouncementModal] = useState(false);
+  const [newAnnouncementTitle, setNewAnnouncementTitle] = useState("");
+  const [newAnnouncementMsg, setNewAnnouncementMsg] = useState("");
+  const [newAnnouncementExpiry, setNewAnnouncementExpiry] = useState("");
+  const [newAnnouncementPinned, setNewAnnouncementPinned] = useState(false);
+
   const fetchNotifications = async () => {
     try {
       const res = await fetch("/api/notifications");
@@ -234,6 +264,292 @@ export default function AdminDashboardPage() {
     const interval = setInterval(fetchNotifications, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  const fetchDmConversations = async () => {
+    try {
+      const res = await fetch("/api/inbox/conversations");
+      if (res.ok) {
+        const data = await res.json();
+        setDmConversations(data);
+      }
+    } catch (e) {
+      console.error("Failed to load DMs", e);
+    }
+  };
+
+  const fetchDmMessages = async (convId: string) => {
+    try {
+      const res = await fetch(`/api/inbox/conversations/${convId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setDmMessages(data.messages || []);
+      }
+    } catch (e) {
+      console.error("Failed to load conversation messages", e);
+    }
+  };
+
+  const fetchGroups = async () => {
+    try {
+      const res = await fetch("/api/inbox/groups");
+      if (res.ok) {
+        const data = await res.json();
+        setGroups(data);
+      }
+    } catch (e) {
+      console.error("Failed to load groups list", e);
+    }
+  };
+
+  const fetchGroupMessages = async (groupId: string) => {
+    try {
+      const res = await fetch(`/api/inbox/conversations/${groupId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setGroupMessages(data.messages || []);
+      }
+    } catch (e) {
+      console.error("Failed to load group messages", e);
+    }
+  };
+
+  const fetchAnnouncements = async () => {
+    try {
+      const res = await fetch("/api/inbox/announcements");
+      if (res.ok) {
+        const data = await res.json();
+        setAnnouncements(data);
+      }
+    } catch (e) {
+      console.error("Failed to load announcements list", e);
+    }
+  };
+
+  useEffect(() => {
+    const searchUsers = async () => {
+      if (userSearchQuery.trim() === "") {
+        setSearchResultsUsers([]);
+        return;
+      }
+      try {
+        const res = await fetch(`/api/inbox/users?query=${encodeURIComponent(userSearchQuery)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setSearchResultsUsers(data);
+        }
+      } catch (e) {
+        console.error("User search failed", e);
+      }
+    };
+
+    const delay = setTimeout(searchUsers, 500);
+    return () => clearTimeout(delay);
+  }, [userSearchQuery]);
+
+  useEffect(() => {
+    if (activeTab === "inbox-dm") {
+      fetchDmConversations();
+    } else if (activeTab === "inbox-groups") {
+      fetchGroups();
+    } else if (activeTab === "inbox-announcements") {
+      fetchAnnouncements();
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    let interval: any;
+    if (activeTab === "inbox-dm" && selectedDmConv) {
+      fetchDmMessages(selectedDmConv.id);
+      interval = setInterval(() => fetchDmMessages(selectedDmConv.id), 8000);
+    } else if (activeTab === "inbox-groups" && selectedGroup) {
+      fetchGroupMessages(selectedGroup.id);
+      interval = setInterval(() => fetchGroupMessages(selectedGroup.id), 8000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [activeTab, selectedDmConv, selectedGroup]);
+
+  const handleSendDmMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedDmConv || dmInput.trim() === "") return;
+    try {
+      const res = await fetch(`/api/inbox/conversations/${selectedDmConv.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: dmInput }),
+      });
+      if (res.ok) {
+        setDmInput("");
+        fetchDmMessages(selectedDmConv.id);
+        fetchDmConversations();
+      }
+    } catch (e) {
+      console.error("Failed to send DM", e);
+    }
+  };
+
+  const handleStartDm = async (recipientUsername: string, recipientFullName: string, recipientPhoto: string) => {
+    try {
+      const res = await fetch("/api/inbox/conversations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipientUsername }),
+      });
+      if (res.ok) {
+        const conv = await res.json();
+        setShowNewDmModal(false);
+        setUserSearchQuery("");
+        setSearchResultsUsers([]);
+        
+        await fetchDmConversations();
+        
+        setSelectedDmConv({
+          id: conv.id,
+          type: "DIRECT",
+          displayName: recipientFullName,
+          displayPhoto: recipientPhoto,
+        });
+      }
+    } catch (e) {
+      console.error("Failed to start DM", e);
+    }
+  };
+
+  const handleArchiveDmConversation = async (convId: string, isCurrentlyArchived: boolean) => {
+    try {
+      const res = await fetch(`/api/inbox/conversations/${convId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: isCurrentlyArchived ? "UNARCHIVE" : "ARCHIVE" }),
+      });
+      if (res.ok) {
+        if (selectedDmConv?.id === convId) {
+          setSelectedDmConv(null);
+          setDmMessages([]);
+        }
+        fetchDmConversations();
+      }
+    } catch (e) {
+      console.error("Failed to archive conversation", e);
+    }
+  };
+
+  const handleDeleteDmConversation = async (convId: string) => {
+    if (!confirm("Are you sure you want to delete this conversation? This only removes it from your view.")) return;
+    try {
+      const res = await fetch(`/api/inbox/conversations/${convId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "DELETE" }),
+      });
+      if (res.ok) {
+        if (selectedDmConv?.id === convId) {
+          setSelectedDmConv(null);
+          setDmMessages([]);
+        }
+        fetchDmConversations();
+      }
+    } catch (e) {
+      console.error("Failed to delete conversation", e);
+    }
+  };
+
+  const handleSendGroupMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedGroup || groupInput.trim() === "") return;
+    try {
+      const res = await fetch(`/api/inbox/conversations/${selectedGroup.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: groupInput }),
+      });
+      if (res.ok) {
+        setGroupInput("");
+        fetchGroupMessages(selectedGroup.id);
+        fetchGroups();
+      }
+    } catch (e) {
+      console.error("Failed to send group message", e);
+    }
+  };
+
+  const handleCreateGroup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newGroupName.trim() === "" || newGroupSelectedMembers.length === 0) return;
+    try {
+      const res = await fetch("/api/inbox/groups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newGroupName,
+          description: newGroupDesc,
+          members: newGroupSelectedMembers,
+        }),
+      });
+      if (res.ok) {
+        const group = await res.json();
+        setNewGroupName("");
+        setNewGroupDesc("");
+        setNewGroupSelectedMembers([]);
+        setShowCreateGroupModal(false);
+        fetchGroups();
+        setSelectedGroup(group);
+      } else {
+        const err = await res.json();
+        alert(err.error || "Failed to create group");
+      }
+    } catch (e) {
+      console.error("Failed to create group", e);
+    }
+  };
+
+  const handleArchiveGroup = async (groupId: string) => {
+    try {
+      const res = await fetch(`/api/inbox/conversations/${groupId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "ARCHIVE" }),
+      });
+      if (res.ok) {
+        setSelectedGroup(null);
+        setGroupMessages([]);
+        fetchGroups();
+      }
+    } catch (e) {
+      console.error("Failed to archive group", e);
+    }
+  };
+
+  const handlePublishAnnouncement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newAnnouncementTitle.trim() === "" || newAnnouncementMsg.trim() === "") return;
+    try {
+      const res = await fetch("/api/inbox/announcements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: newAnnouncementTitle,
+          message: newAnnouncementMsg,
+          expiryDate: newAnnouncementExpiry || null,
+          isPinned: newAnnouncementPinned,
+        }),
+      });
+      if (res.ok) {
+        setNewAnnouncementTitle("");
+        setNewAnnouncementMsg("");
+        setNewAnnouncementExpiry("");
+        setNewAnnouncementPinned(false);
+        setShowNewAnnouncementModal(false);
+        fetchAnnouncements();
+      } else {
+        const err = await res.json();
+        alert(err.error || "Failed to publish announcement");
+      }
+    } catch (e) {
+      console.error("Failed to publish announcement", e);
+    }
+  };
 
   useEffect(() => {
     fetch("/api/users/me")
@@ -373,8 +689,8 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     if (visibleTabs.length > 0) {
-      const tabIds = visibleTabs.map((t) => t.id);
-      if (!tabIds.includes(activeTab)) {
+      const tabIds = visibleTabs.map((t) => t.id) as string[];
+      if (!tabIds.includes(activeTab) && !["inbox-dm", "inbox-groups", "inbox-announcements"].includes(activeTab)) {
         setActiveTab("dashboard");
       }
     }
@@ -2073,6 +2389,660 @@ export default function AdminDashboardPage() {
           </div>
         );
 
+      case "inbox-dm": {
+        const filteredDmMessages = dmMessages.filter(m =>
+          dmChatSearchQuery.trim() === "" ||
+          m.content.toLowerCase().includes(dmChatSearchQuery.toLowerCase())
+        );
+
+        return (
+          <div className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded-sm overflow-hidden flex flex-col md:flex-row h-[600px] transition-colors">
+            {/* Conversations List Panel (Left) */}
+            <div className="w-full md:w-80 border-r border-neutral-200 dark:border-neutral-800 flex flex-col h-full bg-neutral-50/30 dark:bg-neutral-900/10">
+              <div className="p-4 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between">
+                <span className="text-[10px] font-extrabold uppercase tracking-widest text-neutral-400">Conversations</span>
+                <button
+                  onClick={() => setShowNewDmModal(true)}
+                  className="px-2.5 py-1 bg-brand-red hover:bg-brand-red-dark text-white text-[10px] font-bold uppercase tracking-wider rounded-sm transition-colors cursor-pointer"
+                >
+                  New DM
+                </button>
+              </div>
+
+              {/* Local DM search query */}
+              <div className="p-3 border-b border-neutral-100 dark:border-neutral-850">
+                <input
+                  type="text"
+                  placeholder="Search DMs..."
+                  value={dmSearchQuery}
+                  onChange={e => setDmSearchQuery(e.target.value)}
+                  className="w-full bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-850 rounded-sm px-2.5 py-1 text-xs focus:outline-none"
+                />
+              </div>
+
+              {/* DM conversations list */}
+              <div className="flex-1 overflow-y-auto divide-y divide-neutral-100 dark:divide-neutral-850">
+                {dmConversations
+                  .filter(c => c.type === "DIRECT" && c.displayName.toLowerCase().includes(dmSearchQuery.toLowerCase()))
+                  .map(c => {
+                    const isSelected = selectedDmConv?.id === c.id;
+                    const isArchived = JSON.parse(c.archivedByUsernames || "[]").includes(currentUser?.username);
+                    return (
+                      <div
+                        key={c.id}
+                        onClick={() => setSelectedDmConv(c)}
+                        className={`p-3.5 flex items-start space-x-3 cursor-pointer transition-colors relative group ${
+                          isSelected
+                            ? "bg-neutral-100 dark:bg-neutral-850"
+                            : "hover:bg-neutral-50/50 dark:hover:bg-neutral-900/20"
+                        }`}
+                      >
+                        <img
+                          src={c.displayPhoto || "/images/default-avatar.png"}
+                          alt={c.displayName}
+                          className="h-9 w-9 rounded-full object-cover border border-neutral-200 dark:border-neutral-800 bg-white"
+                        />
+                        <div className="min-w-0 flex-grow">
+                          <div className="flex justify-between items-center">
+                            <span className="font-bold text-xs text-neutral-800 dark:text-neutral-200 truncate pr-1">
+                              {c.displayName}
+                            </span>
+                            <span className="text-[8px] text-neutral-400 font-mono shrink-0">
+                              {new Date(c.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            </span>
+                          </div>
+                          <p className={`text-[11px] truncate mt-0.5 ${c.unread ? "font-bold text-brand-red" : "text-neutral-450 dark:text-neutral-400 font-medium"}`}>
+                            {c.lastMessage}
+                          </p>
+                          {isArchived && (
+                            <span className="text-[7.5px] font-extrabold uppercase tracking-widest px-1.5 py-0.5 rounded-sm bg-neutral-100 dark:bg-neutral-800 text-neutral-400 border border-neutral-200 dark:border-neutral-850 mt-1 inline-block">
+                              Archived
+                            </span>
+                          )}
+                        </div>
+
+                        {c.unread && (
+                          <span className="absolute top-4 right-3.5 h-2 w-2 rounded-full bg-brand-red animate-pulse"></span>
+                        )}
+
+                        {/* Quick Hover actions drawer */}
+                        <div className="absolute right-2.5 bottom-2 space-x-1 opacity-0 group-hover:opacity-100 transition-opacity bg-neutral-50 dark:bg-neutral-900 p-0.5 rounded border border-neutral-150 dark:border-neutral-800/80 shadow-sm" onClick={e => e.stopPropagation()}>
+                          <button
+                            onClick={() => handleArchiveDmConversation(c.id, isArchived)}
+                            className="text-[9px] font-extrabold uppercase text-neutral-505 hover:text-brand-red px-1"
+                            title={isArchived ? "Unarchive" : "Archive"}
+                          >
+                            {isArchived ? "Unarc" : "Arc"}
+                          </button>
+                          <button
+                            onClick={() => handleDeleteDmConversation(c.id)}
+                            className="text-[9px] font-extrabold uppercase text-red-505 px-1"
+                            title="Delete conversation from view"
+                          >
+                            Del
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+
+            {/* Chat Room Panel (Right) */}
+            <div className="flex-grow flex flex-col h-full bg-white dark:bg-brand-dark-card">
+              {selectedDmConv ? (
+                <>
+                  {/* Active Chat Header */}
+                  <div className="p-4 border-b border-neutral-200 dark:border-neutral-800 flex justify-between items-center bg-neutral-50/20 dark:bg-neutral-900/5">
+                    <div className="flex items-center space-x-3">
+                      <img
+                        src={selectedDmConv.displayPhoto}
+                        alt={selectedDmConv.displayName}
+                        className="h-9 w-9 rounded-full object-cover border border-neutral-200 dark:border-neutral-800"
+                      />
+                      <div>
+                        <span className="font-bold text-xs text-brand-dark dark:text-white block">{selectedDmConv.displayName}</span>
+                        <span className="text-[9px] text-neutral-455 uppercase font-extrabold tracking-wider">Direct Message Conversation</span>
+                      </div>
+                    </div>
+                    {/* Chat Text Search */}
+                    <div className="flex items-center space-x-3">
+                      <input
+                        type="text"
+                        placeholder="Search conversation..."
+                        value={dmChatSearchQuery}
+                        onChange={e => setDmChatSearchQuery(e.target.value)}
+                        className="bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-850 text-[10px] rounded px-2 py-1 w-32 focus:outline-none"
+                      />
+                      <button
+                        onClick={() => setSelectedDmConv(null)}
+                        className="text-neutral-455 hover:text-neutral-800 dark:hover:text-neutral-200 cursor-pointer"
+                      >
+                        <svg className="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+                          <line x1="18" y1="6" x2="6" y2="18"></line>
+                          <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Messages Bubble Frame */}
+                  <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-neutral-50/20 dark:bg-neutral-950/10">
+                    {filteredDmMessages.length === 0 ? (
+                      <div className="text-center py-16 text-neutral-400 text-[11px] font-bold uppercase tracking-wider italic">
+                        {dmChatSearchQuery ? "No matches found in conversation history." : "Send a message to start conversation."}
+                      </div>
+                    ) : (
+                      filteredDmMessages.map((m) => {
+                        const isMe = m.senderUsername === currentUser?.username;
+                        return (
+                          <div key={m.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
+                            <div className="max-w-[70%] flex flex-col space-y-1">
+                              <div
+                                className={`rounded px-3.5 py-2 text-xs font-semibold leading-relaxed whitespace-pre-wrap ${
+                                  isMe
+                                    ? "bg-brand-red text-white"
+                                    : "bg-neutral-100 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200"
+                                }`}
+                              >
+                                {m.content}
+                              </div>
+                              <span className={`text-[8.5px] text-neutral-400 font-mono ${isMe ? "text-right" : "text-left"}`}>
+                                {new Date(m.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Plain Text Message Composer */}
+                  <form onSubmit={handleSendDmMessage} className="p-4 border-t border-neutral-200 dark:border-neutral-800 bg-neutral-50/10 dark:bg-neutral-900/5 flex items-end space-x-3.5">
+                    <textarea
+                      placeholder="Type a work-related message... (Enter for line break, max 2000 chars)"
+                      value={dmInput}
+                      onChange={e => setDmInput(e.target.value)}
+                      maxLength={2000}
+                      rows={2}
+                      className="flex-grow bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-855 text-xs rounded px-3 py-2 focus:outline-none focus:border-brand-red transition-colors font-semibold text-neutral-800 dark:text-neutral-200 resize-none"
+                      onKeyDown={e => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSendDmMessage(e);
+                        }
+                      }}
+                    />
+                    <button
+                      type="submit"
+                      disabled={dmInput.trim() === ""}
+                      className="bg-brand-red hover:bg-brand-red-dark text-white px-5 py-2 text-xs font-bold uppercase tracking-wider rounded-sm transition-colors cursor-pointer disabled:opacity-50 h-[38px] shrink-0"
+                    >
+                      Send
+                    </button>
+                  </form>
+                </>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center text-center p-8 bg-neutral-50/5 dark:bg-neutral-950/5">
+                  <svg className="w-10 h-10 text-neutral-300 mb-3.5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                  </svg>
+                  <span className="text-xs uppercase font-extrabold tracking-widest text-neutral-400 dark:text-neutral-500">
+                    Select a conversation or search for users to start talking.
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* New DM Selection Modal Overlay */}
+            {showNewDmModal && (
+              <div className="fixed inset-0 bg-neutral-955/40 z-50 flex items-center justify-center p-4">
+                <div className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 w-full max-w-md rounded shadow-lg overflow-hidden animate-fadeInFast flex flex-col max-h-[500px]">
+                  <div className="p-4 border-b border-neutral-100 dark:border-neutral-850 flex justify-between items-center bg-neutral-50 dark:bg-neutral-900/50">
+                    <span className="font-serif font-bold text-xs uppercase text-brand-red tracking-wider">Start New DM Conversation</span>
+                    <button type="button" onClick={() => { setShowNewDmModal(false); setUserSearchQuery(""); setSearchResultsUsers([]); }} className="text-neutral-400 hover:text-neutral-800">
+                      <svg className="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="p-4 border-b border-neutral-100 dark:border-neutral-850">
+                    <input
+                      type="text"
+                      placeholder="Search active users by Name, Department, or Role..."
+                      value={userSearchQuery}
+                      onChange={e => setUserSearchQuery(e.target.value)}
+                      className="w-full bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 text-xs rounded px-3 py-2 focus:outline-none"
+                    />
+                  </div>
+                  <div className="flex-grow overflow-y-auto p-4 space-y-2">
+                    {searchResultsUsers.length === 0 ? (
+                      <div className="text-center text-[10.5px] italic text-neutral-400 py-6">
+                        {userSearchQuery ? "No matching team members found." : "Type a query above to search..."}
+                      </div>
+                    ) : (
+                      searchResultsUsers
+                        .filter(u => u.username !== currentUser?.username)
+                        .map(u => (
+                          <div
+                            key={u.id}
+                            onClick={() => handleStartDm(u.username, u.fullName, u.profilePhoto)}
+                            className="p-2.5 rounded border border-neutral-100 dark:border-neutral-850 hover:border-neutral-300 dark:hover:border-neutral-700 flex items-center space-x-3 cursor-pointer transition-colors"
+                          >
+                            <img src={u.profilePhoto || "/images/default-avatar.png"} alt={u.fullName} className="h-8 w-8 rounded-full object-cover border border-neutral-200 bg-white" />
+                            <div>
+                              <div className="text-xs font-bold text-neutral-800 dark:text-neutral-200">{u.fullName}</div>
+                              <div className="text-[10px] text-neutral-455 font-mono">@{u.username} &bull; {u.role} ({u.departments.join(", ")})</div>
+                            </div>
+                          </div>
+                        ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      case "inbox-groups": {
+        const isManager = currentUser?.role === "OWNER" || currentUser?.role === "ADMIN" || currentUser?.role === "SUPERVISOR";
+        const filteredGroupMessages = groupMessages.filter(m =>
+          groupChatSearchQuery.trim() === "" ||
+          m.content.toLowerCase().includes(groupChatSearchQuery.toLowerCase())
+        );
+
+        return (
+          <div className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 rounded-sm overflow-hidden flex flex-col md:flex-row h-[600px] transition-colors">
+            {/* Groups List (Left) */}
+            <div className="w-full md:w-80 border-r border-neutral-200 dark:border-neutral-800 flex flex-col h-full bg-neutral-50/30 dark:bg-neutral-900/10">
+              <div className="p-4 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between">
+                <span className="text-[10px] font-extrabold uppercase tracking-widest text-neutral-400">Groups</span>
+                {isManager && (
+                  <button
+                    onClick={() => {
+                      setShowCreateGroupModal(true);
+                      fetch("/api/inbox/users?query=")
+                        .then(res => res.json())
+                        .then(data => setSearchResultsUsers(data))
+                        .catch(e => console.error(e));
+                    }}
+                    className="px-2.5 py-1 bg-brand-red hover:bg-brand-red-dark text-white text-[10px] font-bold uppercase tracking-wider rounded-sm transition-colors cursor-pointer"
+                  >
+                    + Create Group
+                  </button>
+                )}
+              </div>
+
+              {/* Group Conversations List */}
+              <div className="flex-1 overflow-y-auto divide-y divide-neutral-100 dark:divide-neutral-850">
+                {groups.length === 0 ? (
+                  <div className="p-6 text-center text-xs text-neutral-400 italic">No group chats found.</div>
+                ) : (
+                  groups.map(g => {
+                    const isSelected = selectedGroup?.id === g.id;
+                    return (
+                      <div
+                        key={g.id}
+                        onClick={() => setSelectedGroup(g)}
+                        className={`p-3.5 cursor-pointer transition-colors relative group flex flex-col space-y-1 ${
+                          isSelected
+                            ? "bg-neutral-100 dark:bg-neutral-850"
+                            : "hover:bg-neutral-50/50 dark:hover:bg-neutral-900/20"
+                        }`}
+                      >
+                        <div className="flex justify-between items-center">
+                          <span className="font-bold text-xs text-neutral-800 dark:text-neutral-200 truncate">
+                            {g.name}
+                          </span>
+                          <span className="text-[8.5px] text-neutral-400 shrink-0 font-mono">
+                            {new Date(g.createdDate).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <p className="text-[10.5px] text-neutral-455 dark:text-neutral-400 truncate">
+                          {g.description || "No description provided."}
+                        </p>
+
+                        {isManager && g.createdBy === currentUser?.username && (
+                          <div className="absolute right-3.5 bottom-2 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                            <button
+                              onClick={() => handleArchiveGroup(g.id)}
+                              className="text-[9px] font-extrabold uppercase text-neutral-505 hover:text-brand-red"
+                            >
+                              Archive Group
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Group Chat Room (Right) */}
+            <div className="flex-grow flex flex-col h-full bg-white dark:bg-brand-dark-card">
+              {selectedGroup ? (
+                <>
+                  {/* Group Chat Header */}
+                  <div className="p-4 border-b border-neutral-200 dark:border-neutral-800 flex justify-between items-center bg-neutral-50/20 dark:bg-neutral-900/5">
+                    <div>
+                      <span className="font-bold text-xs text-brand-dark dark:text-white block">{selectedGroup.name}</span>
+                      <span className="text-[9.5px] text-neutral-455 font-semibold leading-normal">
+                        Members: {JSON.parse(selectedGroup.memberUsernames || "[]").join(", ")}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center space-x-3">
+                      <input
+                        type="text"
+                        placeholder="Search messages..."
+                        value={groupChatSearchQuery}
+                        onChange={e => setGroupChatSearchQuery(e.target.value)}
+                        className="bg-neutral-50 dark:bg-neutral-955 border border-neutral-200 dark:border-neutral-850 text-[10px] rounded px-2 py-1 w-32 focus:outline-none"
+                      />
+                      <button onClick={() => setSelectedGroup(null)} className="text-neutral-455 hover:text-neutral-800 dark:hover:text-neutral-200">
+                        <svg className="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+                          <line x1="18" y1="6" x2="6" y2="18"></line>
+                          <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Messages Bubble Frame */}
+                  <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-neutral-50/20 dark:bg-neutral-955/10">
+                    {filteredGroupMessages.length === 0 ? (
+                      <div className="text-center py-16 text-neutral-405 text-[11px] font-bold uppercase tracking-wider italic">
+                        No matches found.
+                      </div>
+                    ) : (
+                      filteredGroupMessages.map((m) => {
+                        const isMe = m.senderUsername === currentUser?.username;
+                        return (
+                          <div key={m.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
+                            <div className="max-w-[70%] flex flex-col space-y-1">
+                              {!isMe && (
+                                <span className="text-[9px] font-extrabold text-neutral-455 dark:text-neutral-400 block px-1">
+                                  @{m.senderUsername}
+                                </span>
+                              )}
+                              <div
+                                className={`rounded px-3.5 py-2 text-xs font-semibold leading-relaxed whitespace-pre-wrap ${
+                                  isMe
+                                    ? "bg-brand-red text-white"
+                                    : "bg-neutral-100 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200"
+                                }`}
+                              >
+                                {m.content}
+                              </div>
+                              <span className={`text-[8.5px] text-neutral-400 font-mono ${isMe ? "text-right" : "text-left"}`}>
+                                {new Date(m.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Composer */}
+                  <form onSubmit={handleSendGroupMessage} className="p-4 border-t border-neutral-200 dark:border-neutral-800 bg-neutral-50/10 dark:bg-neutral-900/5 flex items-end space-x-3.5">
+                    <textarea
+                      placeholder="Type message to group... (Enter for break, max 2000 chars)"
+                      value={groupInput}
+                      onChange={e => setGroupInput(e.target.value)}
+                      maxLength={2000}
+                      rows={2}
+                      className="flex-grow bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-850 text-xs rounded px-3 py-2 focus:outline-none focus:border-brand-red transition-colors font-semibold text-neutral-800 dark:text-neutral-200 resize-none"
+                      onKeyDown={e => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSendGroupMessage(e);
+                        }
+                      }}
+                    />
+                    <button
+                      type="submit"
+                      disabled={groupInput.trim() === ""}
+                      className="bg-brand-red hover:bg-brand-red-dark text-white px-5 py-2 text-xs font-bold uppercase tracking-wider rounded-sm transition-colors cursor-pointer disabled:opacity-50 h-[38px] shrink-0"
+                    >
+                      Send
+                    </button>
+                  </form>
+                </>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center text-center p-8 bg-neutral-50/5 dark:bg-neutral-955/5">
+                  <svg className="w-10 h-10 text-neutral-300 mb-3.5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                  </svg>
+                  <span className="text-xs uppercase font-extrabold tracking-widest text-neutral-400 dark:text-neutral-500">
+                    Select a Group Room to view conversation.
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Create Group Modal Overlay */}
+            {showCreateGroupModal && (
+              <div className="fixed inset-0 bg-neutral-955/40 z-50 flex items-center justify-center p-4">
+                <form onSubmit={handleCreateGroup} className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 w-full max-w-md rounded shadow-lg overflow-hidden animate-fadeInFast flex flex-col max-h-[550px]">
+                  <div className="p-4 border-b border-neutral-105 dark:border-neutral-850 flex justify-between items-center bg-neutral-50 dark:bg-neutral-900/50">
+                    <span className="font-serif font-bold text-xs uppercase text-brand-red tracking-wider">Create Group Workspace</span>
+                    <button type="button" onClick={() => setShowCreateGroupModal(false)} className="text-neutral-400 hover:text-neutral-800">
+                      <svg className="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="p-4 space-y-4 flex-grow overflow-y-auto">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-extrabold uppercase tracking-widest text-neutral-450 dark:text-neutral-500">Group Name</label>
+                      <input
+                        type="text"
+                        required
+                        value={newGroupName}
+                        onChange={e => setNewGroupName(e.target.value)}
+                        placeholder="e.g. Editorial Supervisors..."
+                        className="w-full bg-neutral-50/50 dark:bg-neutral-955 border border-neutral-200 dark:border-neutral-800 text-xs rounded px-3 py-2 focus:outline-none"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-extrabold uppercase tracking-widest text-neutral-455 dark:text-neutral-500">Group Description</label>
+                      <input
+                        type="text"
+                        value={newGroupDesc}
+                        onChange={e => setNewGroupDesc(e.target.value)}
+                        placeholder="Group description..."
+                        className="w-full bg-neutral-50/50 dark:bg-neutral-955 border border-neutral-200 dark:border-neutral-800 text-xs rounded px-3 py-2 focus:outline-none"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-extrabold uppercase tracking-widest text-neutral-450 dark:text-neutral-500 block mb-1">Select Group Members</label>
+                      <div className="border border-neutral-200 dark:border-neutral-850 rounded p-2.5 h-44 overflow-y-auto space-y-2">
+                        {searchResultsUsers
+                          .filter(u => u.username !== currentUser?.username)
+                          .map((u) => {
+                            const isChecked = newGroupSelectedMembers.includes(u.username);
+                            return (
+                              <label key={u.id} className="flex items-center space-x-3 cursor-pointer select-none py-1 hover:bg-neutral-50 dark:hover:bg-neutral-900 px-1.5 rounded">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => {
+                                    if (isChecked) {
+                                      setNewGroupSelectedMembers(newGroupSelectedMembers.filter(x => x !== u.username));
+                                    } else {
+                                      setNewGroupSelectedMembers([...newGroupSelectedMembers, u.username]);
+                                    }
+                                  }}
+                                  className="rounded border-neutral-300 text-brand-red focus:ring-brand-red h-4 w-4"
+                                />
+                                <div className="text-xs font-semibold text-neutral-705 dark:text-neutral-300">
+                                  {u.fullName} <span className="font-normal text-[10px] text-neutral-450">(@{u.username})</span>
+                                </div>
+                              </label>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-4 border-t border-neutral-100 dark:border-neutral-850 bg-neutral-50 dark:bg-neutral-900/50 flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={newGroupName.trim() === "" || newGroupSelectedMembers.length === 0}
+                      className="bg-brand-red hover:bg-brand-red-dark text-white text-xs font-bold uppercase tracking-wider px-6 py-2.5 rounded-sm transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      Create Group Chat
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      case "inbox-announcements": {
+        const isAuthorizedToPublish = currentUser?.role === "OWNER" || currentUser?.role === "ADMIN" || currentUser?.role === "SUPERVISOR";
+        return (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center border-b border-neutral-200 dark:border-neutral-800 pb-3">
+              <div>
+                <h2 className="font-serif font-bold text-lg text-brand-dark dark:text-white">Announcements Board</h2>
+                <p className="text-xs text-neutral-450 mt-1">Read-only general broadcast announcements from supervisors and administration.</p>
+              </div>
+              {isAuthorizedToPublish && (
+                <button
+                  onClick={() => setShowNewAnnouncementModal(true)}
+                  className="px-4 py-2 bg-brand-red hover:bg-brand-red-dark text-white text-xs font-bold uppercase tracking-wider rounded-sm transition-colors cursor-pointer shadow-sm"
+                >
+                  Publish Announcement
+                </button>
+              )}
+            </div>
+
+            {announcements.length === 0 ? (
+              <div className="text-center py-16 border border-dashed border-neutral-200 dark:border-neutral-800 rounded text-neutral-400 text-xs uppercase font-bold tracking-widest">
+                No active announcements found.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {announcements.map((a) => (
+                  <div
+                    key={a.id}
+                    className={`bg-white dark:bg-brand-dark-card border p-5 rounded-sm transition-all duration-200 ${
+                      a.isPinned
+                        ? "border-brand-red shadow-sm bg-brand-red/[0.01]"
+                        : "border-neutral-200 dark:border-neutral-800"
+                    }`}
+                  >
+                    <div className="flex justify-between items-start gap-4">
+                      <div className="space-y-1">
+                        <div className="flex items-center space-x-2">
+                          <h3 className="font-serif font-bold text-sm text-brand-dark dark:text-white leading-tight">
+                            {a.title}
+                          </h3>
+                          {a.isPinned && (
+                            <span className="text-[8px] font-extrabold uppercase tracking-widest px-1.5 py-0.5 rounded bg-brand-red/10 text-brand-red border border-brand-red/15">
+                              Pinned
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[9px] text-neutral-400 block font-semibold">
+                          Published by @{a.createdBy} &bull; {new Date(a.createdDate).toLocaleDateString()}
+                        </span>
+                      </div>
+                      {a.expiryDate && (
+                        <span className="text-[9.5px] font-mono text-neutral-405 bg-neutral-50 dark:bg-neutral-900 border border-neutral-150 dark:border-neutral-800 rounded px-2 py-0.5 shrink-0">
+                          Expires: {new Date(a.expiryDate).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-neutral-650 dark:text-neutral-350 leading-relaxed font-semibold mt-3.5 whitespace-pre-wrap">
+                      {a.message}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Publish Announcement Modal */}
+            {showNewAnnouncementModal && (
+              <div className="fixed inset-0 bg-neutral-955/40 z-50 flex items-center justify-center p-4">
+                <form onSubmit={handlePublishAnnouncement} className="bg-white dark:bg-brand-dark-card border border-neutral-200 dark:border-neutral-800 w-full max-w-md rounded shadow-lg overflow-hidden animate-fadeInFast flex flex-col">
+                  <div className="p-4 border-b border-neutral-100 dark:border-neutral-850 flex justify-between items-center bg-neutral-50 dark:bg-neutral-900/50">
+                    <span className="font-serif font-bold text-xs uppercase text-brand-red tracking-wider">Publish Announcement</span>
+                    <button type="button" onClick={() => setShowNewAnnouncementModal(false)} className="text-neutral-400 hover:text-neutral-800">
+                      <svg className="w-5 h-5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="p-4 space-y-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-extrabold uppercase tracking-widest text-neutral-450 dark:text-neutral-500">Announcement Title</label>
+                      <input
+                        type="text"
+                        required
+                        value={newAnnouncementTitle}
+                        onChange={e => setNewAnnouncementTitle(e.target.value)}
+                        placeholder="e.g. Server Maintenance Notice..."
+                        className="w-full bg-neutral-50/50 dark:bg-neutral-955 border border-neutral-200 dark:border-brand-red/10 text-xs rounded px-3 py-2 focus:outline-none"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-extrabold uppercase tracking-widest text-neutral-455 dark:text-neutral-500">Message Content</label>
+                      <textarea
+                        required
+                        rows={4}
+                        value={newAnnouncementMsg}
+                        onChange={e => setNewAnnouncementMsg(e.target.value)}
+                        placeholder="Type general announcement details here..."
+                        className="w-full bg-neutral-50/50 dark:bg-neutral-955 border border-neutral-200 dark:border-neutral-800 text-xs rounded px-3 py-2 focus:outline-none resize-none font-semibold text-neutral-800 dark:text-neutral-200"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-extrabold uppercase tracking-widest text-neutral-450 dark:text-neutral-500">Expiry Date (Optional)</label>
+                        <input
+                          type="date"
+                          value={newAnnouncementExpiry}
+                          onChange={e => setNewAnnouncementExpiry(e.target.value)}
+                          className="w-full bg-neutral-50/50 dark:bg-neutral-955 border border-neutral-200 dark:border-neutral-800 text-xs rounded px-3 py-1.5 focus:outline-none cursor-pointer"
+                        />
+                      </div>
+                      <label className="flex items-center space-x-2.5 pt-6 cursor-pointer select-none font-bold text-xs text-neutral-600 dark:text-neutral-350">
+                        <input
+                          type="checkbox"
+                          checked={newAnnouncementPinned}
+                          onChange={e => setNewAnnouncementPinned(e.target.checked)}
+                          className="rounded border-neutral-300 text-brand-red focus:ring-brand-red h-4 w-4"
+                        />
+                        <span>Pin Announcement</span>
+                      </label>
+                    </div>
+                  </div>
+                  <div className="p-4 border-t border-neutral-100 dark:border-neutral-850 bg-neutral-50 dark:bg-neutral-900/50 flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={newAnnouncementTitle.trim() === "" || newAnnouncementMsg.trim() === ""}
+                      className="bg-brand-red hover:bg-brand-red-dark text-white text-xs font-bold uppercase tracking-wider px-6 py-2.5 rounded-sm transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      Publish Announcement
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+          </div>
+        );
+      }
+
       case "reports":
         return (
           <div className="space-y-6">
@@ -2157,7 +3127,7 @@ export default function AdminDashboardPage() {
 
           {/* Navigation Links list */}
           <nav className="p-4 space-y-1">
-            {visibleTabs.map((link) => (
+            {visibleTabs.filter(link => link.id !== "inbox").map((link) => (
               <button
                 key={link.id}
                 onClick={() => {
@@ -2174,6 +3144,89 @@ export default function AdminDashboardPage() {
                 <span>{link.label}</span>
               </button>
             ))}
+
+            {/* Inbox Section */}
+            <div className="pt-4 pb-1">
+              <span className="px-3 text-[9px] font-extrabold uppercase tracking-widest text-neutral-400 dark:text-neutral-500 block">
+                Inbox
+              </span>
+            </div>
+
+            <button
+              onClick={() => {
+                setActiveTab("inbox-dm");
+                setShowMobileSidebar(false);
+              }}
+              className={`w-full flex items-center px-3 py-2 rounded-sm text-xs font-bold transition-all text-left cursor-pointer ${
+                activeTab === "inbox-dm"
+                  ? "bg-brand-red text-white"
+                  : "text-neutral-550 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-850"
+              }`}
+            >
+              <svg className="w-4 h-4 mr-2.5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+              </svg>
+              <span>Direct Messages</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveTab("inbox-groups");
+                setShowMobileSidebar(false);
+              }}
+              className={`w-full flex items-center px-3 py-2 rounded-sm text-xs font-bold transition-all text-left cursor-pointer ${
+                activeTab === "inbox-groups"
+                  ? "bg-brand-red text-white"
+                  : "text-neutral-550 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-850"
+              }`}
+            >
+              <svg className="w-4 h-4 mr-2.5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+              </svg>
+              <span>Groups</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveTab("inbox-announcements");
+                setShowMobileSidebar(false);
+              }}
+              className={`w-full flex items-center px-3 py-2 rounded-sm text-xs font-bold transition-all text-left cursor-pointer ${
+                activeTab === "inbox-announcements"
+                  ? "bg-brand-red text-white"
+                  : "text-neutral-550 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-850"
+              }`}
+            >
+              <svg className="w-4 h-4 mr-2.5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                <line x1="12" y1="9" x2="12" y2="13"></line>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+              </svg>
+              <span>Announcements</span>
+            </button>
+
+            {visibleTabs.some(link => link.id === "inbox") && (
+              <button
+                onClick={() => {
+                  setActiveTab("inbox");
+                  setShowMobileSidebar(false);
+                }}
+                className={`w-full flex items-center px-3 py-2 rounded-sm text-xs font-bold transition-all text-left cursor-pointer ${
+                  activeTab === "inbox"
+                    ? "bg-brand-red text-white"
+                    : "text-neutral-550 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-850"
+                }`}
+              >
+                <svg className="w-4 h-4 mr-2.5 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                  <polyline points="22,6 12,13 2,6"></polyline>
+                </svg>
+                <span>Public Inquiries</span>
+              </button>
+            )}
           </nav>
         </div>
 
