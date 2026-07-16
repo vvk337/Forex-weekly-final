@@ -86,8 +86,8 @@ export async function POST(request: Request) {
       name: "admin_token",
       value: token,
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      secure: false, // Allow local Wi-Fi HTTP authentication testing
+      sameSite: "lax", // Change strict to lax to permit cross-origin redirect contexts on IP connections
       maxAge: 60 * 60 * 6, // 6 hours
     });
 
